@@ -260,7 +260,7 @@ int main(int argc, char **argv)
         {NULL, NULL, 0, 0, 0, 0, 0}};
 
     struct lws_context_creation_info info;
-    const char *iface = "your_IP_addr";
+    const char *iface = "your_IP_addr"; //add your IP address
     int port = 8080;
     int opts = 0;
 

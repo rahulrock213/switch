@@ -117,7 +117,7 @@ int main(void)
     }
 
     connect_info.context = context;
-    connect_info.address = "172.16.100.44";
+    connect_info.address = "your_IP_addr"; //add your IP address
     connect_info.port = 8080;
     connect_info.path = "/";
     connect_info.host = connect_info.address;

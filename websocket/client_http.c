@@ -8,7 +8,7 @@ int main(void)
 
     curl = curl_easy_init();
     if (curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, "http://172.16.100.44:8080");
+        curl_easy_setopt(curl, CURLOPT_URL, "http://your_IP_addr:8080"); //add your IP address
 
         const char *json_data = "{\"username\": \"admin\", \"password\": \"admin\"}";
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_data);
