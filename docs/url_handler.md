@@ -1,7 +1,7 @@
 # URL Handler
 
 ## Purpose
-The URL Handler script is designed to modify the `rudder_url` in `sw-config.json` to facilitate the pre-provisioning of network switches to the cloud.
+The URL Handler script is designed to modify the `rudder_url` in `sw-config.json` to facilitate the pre-provisioning of QN switches to the cloud.
 
 ## Full Forms
 - **NSC**: Network Switch Controller
