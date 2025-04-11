@@ -42,12 +42,16 @@ copy sftp_upload path-uploads
 
 ### 3. 📥 Download Configuration from SFTP Server
 
-Use this to fetch configuration or data from the server to the switch.
+Use this command to download a configuration file from the SFTP server to the switch.
 
 **Command Format:**
 ```sh
-copy sftp_download path-$path
+copy sftp_download path-<path>
 ```
+
+> **Note:**  
+> In the filename, use a **dot (`.`)** to represent **directory separators (`/`)** in the remote path.  
+> For example, `path-uploads.startup-config` corresponds to the remote path `uploads/startup-config`.
 
 **Example:**
 ```sh
