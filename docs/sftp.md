@@ -13,7 +13,7 @@ Use this command to trigger SFTP access to a switch using its IP, port, username
 
 **Command Format:**
 ```sh
-copy sftp_enable ip-$ip_addr_port-$port_user-$username_pass-$password
+copy sftp_enable ip-<ip_addr>_port-<port>_user-<username>_pass-<password>
 ```
 
 **Example:**
@@ -29,7 +29,7 @@ Use this to upload configuration or data from the switch to the server.
 
 **Command Format:**
 ```sh
-copy sftp_upload path-$path
+copy sftp_upload path-<path>
 ```
 
 **Example:**
