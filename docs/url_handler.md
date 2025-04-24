@@ -1,37 +1,35 @@
-# URL Handler
+# URL Handler (Dynamic)
 
-## Purpose
-The URL Handler script is designed to modify the `rudder_url` in `sw-config.json` to facilitate the pre-provisioning of QN switches to the cloud.
+## Purpose  
+The URL Handler script is designed to modify the `rudder_url` in `sw-config.json` to facilitate the pre-provisioning of QN switches to **custom Rudder endpoints**.
 
-## Full Forms
-- **NSC**: Network Switch Controller
-- **QNR**: QN Live Rudder URL → [https://rudder.qntmnet.com](https://rudder.qntmnet.com)
-- **QNRUS**: QN US Rudder URL → [https://us.rudder.qntmnet.com](https://us.rudder.qntmnet.com)
-- **QNRUAT**: QN UAT Rudder URL → [https://rudder.uat.qntmnet.com](https://rudder.uat.qntmnet.com)
-- **QNRDEV**: QN Dev Rudder URL → [https://rudder.dev.qntmnet.com](https://rudder.dev.qntmnet.com)
+## How to Use  
+To update the `rudder_url`, run one of the following commands in the CLI of the switch:
 
-## How to Use
-To update the `rudder_url`, run the following command in the CLI of the switch:
-
-- To change to US Rudder URL:
+- To use a custom HTTP Rudder URL:
   ```sh
-  copy nsc qnrus
+  copy nsc http-<ip>
   ```
-- To change to Dev Rudder URL:
+- To use a custom HTTPS Rudder URL:
   ```sh
-  copy nsc qnrdev
-  ```
-- To change to UAT Rudder URL:
-  ```sh
-  copy nsc qnruat
-  ```
-- To change to Live Rudder URL:
-  ```sh
-  copy nsc qnr
+  copy nsc https-<ip>
   ```
 
-## Things to Note
-- This script **will not work** if the switch is already onboarded.
-- The script **only works** when the switch is in **Quick Setup Mode**.
-- Ensure the `rudder_url` is correctly updated in `sw-config.json` using the `more sw-config.json` command to verify changes.
+### Examples:
+- For HTTP:
+  ```sh
+  copy nsc http-172.16.100.29
+  ```
+- For HTTPS:
+  ```sh
+  copy nsc https-172.16.100.29
+  ```
 
+> These commands create a control file in `/mnt/flash` that the script uses to convert into a full Rudder URL.
+
+## Things to Note  
+- This script **will not work** if the switch is already onboarded.  
+- The script **only works** when the switch is in **Quick Setup Mode**.  
+- The file name must be in the format `http-<ip>` or `https-<ip>`.  
+- After execution, the `rudder_url` in `sw-config.json` and the `url5` entry in the preprovision service config are updated.  
+- Use `more sw-config.json` to verify the URL change.
