@@ -47,7 +47,7 @@ copy sftp_upload_startup path-<path>
 
 **Example:**
 ```sh
-copy sftp_upload_startup path-uploads.startup-config
+copy sftp_upload_startup path-uploads
 ```
 
 ---
@@ -63,7 +63,7 @@ copy sftp_upload_running path-<path>
 
 **Example:**
 ```sh
-copy sftp_upload_running path-uploads.running-config
+copy sftp_upload_running path-uploads
 ```
 
 ---
