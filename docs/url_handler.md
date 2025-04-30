@@ -43,7 +43,6 @@ copy nsc https-172.16.100.29_8443
 - Works **only** in **Quick Setup Mode**
 - Does **not** work if the switch is already onboarded
 - Port is **optional**  
-  - If not provided, default ports are used (80 for HTTP, 443 for HTTPS)
 - The `rudder_url` in `sw-config.json` and `url5` in the preprovision config are updated
 - You can check the updated URL using:
   ```sh
