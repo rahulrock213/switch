@@ -1,35 +1,51 @@
 # URL Handler (Dynamic)
 
 ## Purpose  
-The URL Handler script is designed to modify the `rudder_url` in `sw-config.json` to facilitate the pre-provisioning of QN switches to **custom Rudder endpoints**.
+The **URL Handler** updates the `rudder_url` in `sw-config.json`, allowing the switch to connect to a **custom Rudder server** (HTTP or HTTPS).  
+This is used during **Quick Setup Mode** for pre-provisioning.
+
+---
 
 ## How to Use  
-To update the `rudder_url`, run one of the following commands in the CLI of the switch:
 
-- To use a custom HTTP Rudder URL:
-  ```sh
-  copy nsc http-<ip>
-  ```
-- To use a custom HTTPS Rudder URL:
-  ```sh
-  copy nsc https-<ip>
-  ```
+Use the `copy nsc` command in the switch CLI with either HTTP or HTTPS, and optionally include a port.
 
-### Examples:
-- For HTTP:
-  ```sh
-  copy nsc http-172.16.100.29
-  ```
-- For HTTPS:
-  ```sh
-  copy nsc https-172.16.100.29
-  ```
+### 🔸 HTTP Rudder URL
+```sh
+copy nsc http-<ip>[_<port>]
+```
 
-> These commands create a control file in `/mnt/flash` that the script uses to convert into a full Rudder URL.
+**Examples:**
+```sh
+copy nsc http-172.16.100.29
+copy nsc http-172.16.100.29_8000
+```
 
-## Things to Note  
-- This script **will not work** if the switch is already onboarded.  
-- The script **only works** when the switch is in **Quick Setup Mode**.  
-- The file name must be in the format `http-<ip>` or `https-<ip>`.  
-- After execution, the `rudder_url` in `sw-config.json` and the `url5` entry in the preprovision service config are updated.  
-- Use `more sw-config.json` to verify the URL change.
+---
+
+### 🔸 HTTPS Rudder URL
+```sh
+copy nsc https-<ip>[_<port>]
+```
+
+**Examples:**
+```sh
+copy nsc https-172.16.100.29
+copy nsc https-172.16.100.29_8443
+```
+
+> These commands create a file in `/mnt/flash` that the script reads to update the Rudder URL.
+
+---
+
+## Notes
+
+- Works **only** in **Quick Setup Mode**
+- Does **not** work if the switch is already onboarded
+- Port is **optional**  
+  - If not provided, default ports are used (80 for HTTP, 443 for HTTPS)
+- The `rudder_url` in `sw-config.json` and `url5` in the preprovision config are updated
+- You can check the updated URL using:
+  ```sh
+  more sw-config.json
+  ```
