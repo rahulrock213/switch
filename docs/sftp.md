@@ -113,7 +113,7 @@ copy sftp_download_image path-<path>
 
 **Example:**
 ```sh
-copy sftp_download_image path-uploads.image_QN-ROS7-2.3.8.02.qntm
+copy sftp_download_image path-uploads.QN_SW-IE-2.3.10.00.qntm
 ```
 
 ---
@@ -127,4 +127,4 @@ copy sftp_download_image path-uploads.image_QN-ROS7-2.3.8.02.qntm
 | Download startup-config      | Server ➜ Switch   | `copy sftp_download_startup path-uploads.startup-config`         |
 | Upload running-config        | Switch ➜ Server   | `copy sftp_upload_running path-uploads.running-config`           |
 | Download running-config      | Server ➜ Switch   | `copy sftp_download_running path-uploads.running-config`         |
-| Download image               | Server ➜ Switch   | `copy sftp_download_image path-uploads.image_<firmware>.qntm`    |
+| Download image               | Server ➜ Switch   | `copy sftp_download_image path-uploads.QN_SW-IE-2.3.10.00.qntm`    |
