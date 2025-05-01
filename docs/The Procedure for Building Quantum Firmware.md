@@ -3,7 +3,7 @@
 ## INSTRUCTIONS
 
 - **DON’T MISS ANY STEPS.** IF YOU MISS, THE FIRMWARE WILL BEHAVE UNEXPECTEDLY.
-- This document is only for **“Alleycat3”**, **“Aldrin2”**, and **“PonCat3”** platforms only.
+- This document is only for **“AC3”**,**“AC5”**, **“A2”**, **“FALCON”**, and **“PonCat3”** platforms only.
 - Using this document, a developer can easily create Quantum switch firmware.
 - **Linux** as your host machine is required, and Linux expertise is necessary.
 
@@ -54,16 +54,14 @@ Add a condition in the `lib.sh` file for dividing platform binaries:
 - Add the necessary conditions between the `mkdir` and `cp` commands.
 
 ``` bash
-    if [ $PLATFORM == 'QN-CAT3' ]; then
+    if [ $PLATFORM == 'QN-ROS6' ]; then
         cp -r ${TOP_DIR}/QN_PKGS_AC3/build/*         ./rootfs/usr/bin/
-    elif [ $PLATFORM == 'QN-A2' ]; then
-        cp -r ${TOP_DIR}/QN_PKGS_A2/build/*         ./rootfs/usr/bin/
     elif [ $PLATFORM == 'QN-ROS7' ]; then
         cp -r ${TOP_DIR}/QN_PKGS_AC5X/build/*       ./rootfs/usr/bin/
     fi
 ```
 
-For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/7FXQ7xy2/)
+For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/d7rpBVmy/)
 
 ---
 ---
@@ -77,19 +75,19 @@ For the same identity for every firmware, that’s why we keep the same version 
 
 **Steps:**
 
-- Open the `build-qn-sw225-cat3.sh` , `build-qn-a2.sh` and `build-qn-ros7.sh`   file in the “src” directory.
+- Open the `build-qn-ros6.sh` and `build-qn-ros7.sh`   file in the “src” directory.
 - Modify the `VERSION` variable by adding “00” behind its value.
 
 Example:
 - **Old:** `VERSION=’XX.XX.XX’`
 - **New:** `VERSION=’XX.XX.XX.00’`
 
-- Add below lines after `SDK_DIR=${TOP_DIR}/sdk-qn-sw225-cat3` , `SDK_DIR=${TOP_DIR}/sdk-qn-a2` and `SDK_DIR=${TOP_DIR}/sdk-qn-ros7`
+- Add below lines after `SDK_DIR=${TOP_DIR}/build-qn-ros6.sh` and `SDK_DIR=${TOP_DIR}/sdk-qn-ros7`
 ``` shell
-    echo "${VERSION}" | tee ./fw_version
-    cp ./fw_version ./rootfs/common/etc/
+echo "${VERSION}" | tee ./fw_version
+cp ./fw_version ./rootfs/common/etc/
 ```
-For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/sMhsoeTH/)
+For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/ma14BPGo/)
 
 
 ---
@@ -104,7 +102,7 @@ The QN Program includes binaries and scripts to achieve certain goals and target
 **Steps:**
 
 - Clone or download the program from [GitHub](https://github.com/Khimji07/Quantum_switch/tree/main/Firmware_build_use_only).
-- Add the downloaded folders `QN_PKGS_A2/build`, `QN_PKGS_AC3/build` and `QN_PKGS_AC5X/build` to the earlier extracted SDK.
+- Add the downloaded folders `QN_PKGS_AC3/build` and `QN_PKGS_AC5X/build` to the earlier extracted SDK.
 
 ---
 ---
@@ -176,8 +174,7 @@ A standalone GUI is a switch-independent GUI. Using the standalone GUI, we can m
 - Clone or download the “www” directory from [GitHub](https://github.com/Khimji07/Quantum_switch/tree/main/Firmware_build_use_only).
 - Compress the www folder to `webdevice-qntmnet-9999-1.xpak.tar.bz2` using the command: `tar -cjvf webdevice-qntmnet-9999-1.xpak.tar.bz2 www`.
 - Copy it to two different locations in the extracted SDK.
-    1) /extrected_SDK_path/replica/output/cat3/webdevice-qntmnet-9999-1.xpak.tar.bz2
-    2) /extrected_SDK_path/replica/output/a2/webdevice-qntmnet-9999-1.xpak.tar.bz2
+    1) /extrected_SDK_path/replica/output/ros6/webdevice-qntmnet-9999-1.xpak.tar.bz2
     3) /extrected_SDK_path/replica/output/ros7/webdevice-qntmnet-9999-1.xpak.tar.bz2
 
 ---
@@ -186,14 +183,14 @@ A standalone GUI is a switch-independent GUI. Using the standalone GUI, we can m
 ### 8) Replace rc.conf
 
 - Download the `rc.conf` file from [GitHub](https://github.com/Khimji07/Quantum_switch/tree/main/Firmware_build_use_only).
-- Replace it in `/extracted_SDK_Path/rootfs/cat3/etc/rc.conf`.
+- Replace it in `/extracted_SDK_Path/rootfs/ros6/etc/rc.conf`.
 
-For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/iwioSzo2/)
+For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/waOYovMu/)
 
 - Download the `rc.conf` file from [GitHub](https://github.com/Khimji07/Quantum_switch/tree/main/Firmware_build_use_only).
 - Replace it in `/extracted_SDK_Path/rootfs/ros7/etc/rc.conf`.
 
-For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/iwioSzo2/)
+For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/gGjNSBhT/)
 
 ---
 ---
@@ -203,7 +200,7 @@ For a visual comparison of the changes, refer to this link: [Diff Checker](https
 - Download the `1` file from [GitHub](https://github.com/Khimji07/Quantum_switch/tree/main/Firmware_build_use_only).
 - Replace it in `/extracted_SDK_Path/rootfs/common/etc/runit/1`.
 
-For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/iwioSzo2/)
+For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/oQtAp7wi/)
 
 ---
 ---
@@ -224,7 +221,7 @@ For a visual comparison of the changes, refer to this link: [Diff Checker](https
 - make change in `default_config.txt` file located in `/extracted_SDK_Path/rootfs/common/ros/current/default_config.txt`
 - add `ip ssh password-auth` below  `ip ssh server`
 
-For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/iwioSzo2/)
+For a visual comparison of the changes, refer to this link: [Diff Checker](https://www.diffchecker.com/r4E9u9SH/)
 
 ---
 ---
@@ -236,16 +233,10 @@ To compile the firmware, follow these steps for individual switches:
 ### For Alleycat3
 
 - Navigate to the extracted SDK folder.
-- Execute the command: `./src/build-qn-sw225-ac3.sh`.
-
-### For Aldrin2
-
-- Navigate to the extracted SDK folder.
-- Execute the command: `./src/build-qn-sw225-a2.sh`.
+- Execute the command: `./src/build-qn-ros6.sh`.
 
 ### For Alleycat5 and Data  Center switch
 
 - Navigate to the extracted SDK folder.
-- Execute the command: `./src/build-qn-sw225-ros7.sh`.
+- Execute the command: `./src/build-qn-ros7.sh`.
 ---
-
