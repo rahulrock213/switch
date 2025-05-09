@@ -45,6 +45,8 @@ func init() {
 				return handlers.HandleTelnetEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\">", handlers.RoutingNamespace))) {
 				return handlers.HandleRouteEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\">", handlers.IpInterfaceNamespace))) {
+				return handlers.HandleIpInterfaceEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			}
 
 			// Add other edit-config handlers based on content/namespace
@@ -229,11 +231,12 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>%s</capability> <!-- SSH Server Config Capability -->
     <capability>%s</capability> <!-- Telnet Server Config Capability -->
     <capability>%s</capability> <!-- Routing Capability -->
+    <capability>%s</capability> <!-- IP Interface Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
-%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, handlers.RoutingNamespace, sessionID, appConfig.FrameEnd)
-	// Added handlers.RoutingNamespace to advertise Routing capability
+%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, handlers.RoutingNamespace, handlers.IpInterfaceNamespace, sessionID, appConfig.FrameEnd)
+	// Added handlers.IpInterfaceNamespace to advertise IP Interface capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
 		return fmt.Errorf("failed to send server hello: %w", err)
@@ -321,6 +324,9 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get-config> with Telnet filter. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\"", handlers.IpInterfaceNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get> with IP Interface filter. Message ID: %s", msgID)
+			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 			// } else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
 			// 	log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with Routing filter. Message ID: %s", msgID)
 			// 	return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd) // Placeholder if GET is implemented
