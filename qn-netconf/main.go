@@ -43,6 +43,8 @@ func init() {
 				return handlers.HandleSSHEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\">", handlers.TelnetConfigNamespace))) {
 				return handlers.HandleTelnetEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\">", handlers.RoutingNamespace))) {
+				return handlers.HandleRouteEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			}
 
 			// Add other edit-config handlers based on content/namespace
@@ -226,11 +228,12 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>%s</capability> <!-- Interface Capability -->
     <capability>%s</capability> <!-- SSH Server Config Capability -->
     <capability>%s</capability> <!-- Telnet Server Config Capability -->
+    <capability>%s</capability> <!-- Routing Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
-%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, sessionID, appConfig.FrameEnd)
-	// Added handlers.TelnetConfigNamespace to advertise Telnet capability
+%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, handlers.RoutingNamespace, sessionID, appConfig.FrameEnd)
+	// Added handlers.RoutingNamespace to advertise Routing capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
 		return fmt.Errorf("failed to send server hello: %w", err)
@@ -295,6 +298,9 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get> with Telnet filter. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// } else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
+			// 	log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get> with Routing filter. Message ID: %s", msgID)
+			// 	return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd) // Placeholder if GET is implemented
 
 		}
 		// If it's a <get> but not for VLANs as per the filter above, it's unhandled by this specific logic.
@@ -315,6 +321,9 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get-config> with Telnet filter. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// } else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
+			// 	log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with Routing filter. Message ID: %s", msgID)
+			// 	return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd) // Placeholder if GET is implemented
 		}
 		log.Printf("NETCONF_SERVER: Received <get-config> operation with an unhandled filter. Message ID: %s. Request: %s", msgID, string(request))
 		return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "The <get-config> operation with the specified filter is not supported.")
