@@ -41,6 +41,8 @@ func init() {
 				return handlers.HandleEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\">", handlers.SshConfigNamespace))) {
 				return handlers.HandleSSHEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\">", handlers.TelnetConfigNamespace))) {
+				return handlers.HandleTelnetEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			}
 
 			// Add other edit-config handlers based on content/namespace
@@ -223,11 +225,12 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>%s</capability> <!-- VLAN Capability -->
     <capability>%s</capability> <!-- Interface Capability -->
     <capability>%s</capability> <!-- SSH Server Config Capability -->
+    <capability>%s</capability> <!-- Telnet Server Config Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
-%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, sessionID, appConfig.FrameEnd)
-	// Added handlers.SshConfigNamespace to advertise SSH capability
+%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, sessionID, appConfig.FrameEnd)
+	// Added handlers.TelnetConfigNamespace to advertise Telnet capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
 		return fmt.Errorf("failed to send server hello: %w", err)
@@ -289,6 +292,9 @@ func generateResponse(request []byte) []byte {
 			// Simplified check: if the ssh-server-config tag with the correct namespace is present.
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get> with SSH filter. Message ID: %s", msgID)
 			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get> with Telnet filter. Message ID: %s", msgID)
+			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 
 		}
 		// If it's a <get> but not for VLANs as per the filter above, it's unhandled by this specific logic.
@@ -306,6 +312,9 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\"", handlers.SshConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get-config> with SSH filter. Message ID: %s", msgID)
 			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get-config> with Telnet filter. Message ID: %s", msgID)
+			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		}
 		log.Printf("NETCONF_SERVER: Received <get-config> operation with an unhandled filter. Message ID: %s. Request: %s", msgID, string(request))
 		return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "The <get-config> operation with the specified filter is not supported.")
