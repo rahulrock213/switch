@@ -34,12 +34,15 @@ func init() {
 		// If you still need a custom <get-vlans> operation for other purposes, you can uncomment and keep this.
 		// "get-vlans": func(miyagiSocketPath, frameEnd string, request []byte, msgID string) []byte {
 		// 	return handlers.BuildGetVlansResponse(miyagiSocketPath, msgID, frameEnd)
-		// },
+		// }, // Keep this comma if you uncomment the above
 		"edit-config": func(miyagiSocketPath, frameEnd string, request []byte, msgID string) []byte {
 			// More specific dispatch for edit-config can be done here if needed
 			if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\">", handlers.VlanNamespace))) {
 				return handlers.HandleEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\">", handlers.SshConfigNamespace))) {
+				return handlers.HandleSSHEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			}
+
 			// Add other edit-config handlers based on content/namespace
 			log.Printf("NETCONF_SERVER: Received <edit-config> for unknown model or malformed VLAN config: %s", string(request))
 			return buildErrorResponse(frameEnd, msgID, "operation-failed", "Unsupported configuration target in edit-config")
@@ -219,11 +222,12 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>urn:ietf:params:netconf:base:1.0</capability>
     <capability>%s</capability> <!-- VLAN Capability -->
     <capability>%s</capability> <!-- Interface Capability -->
+    <capability>%s</capability> <!-- SSH Server Config Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
-%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, sessionID, appConfig.FrameEnd)
-	// Added handlers.InterfaceNamespace to advertise interface capability
+%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, sessionID, appConfig.FrameEnd)
+	// Added handlers.SshConfigNamespace to advertise SSH capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
 		return fmt.Errorf("failed to send server hello: %w", err)
@@ -260,28 +264,55 @@ func generateSessionID() string {
 func generateResponse(request []byte) []byte {
 	msgID := extractMessageID(request)
 
+	// Find the start of the <rpc> tag, skipping any XML declaration
+	rpcQuery := request // Assume request starts with <rpc> by default
+	if xmlDeclEnd := bytes.Index(request, []byte("?>")); xmlDeclEnd != -1 {
+		// Check if there's content after "?>"
+		if xmlDeclEnd+2 < len(request) {
+			potentialRpcStart := bytes.TrimSpace(request[xmlDeclEnd+2:]) // Trim leading whitespace after XML decl
+			if bytes.HasPrefix(potentialRpcStart, []byte("<rpc")) {
+				rpcQuery = potentialRpcStart
+			}
+		}
+	}
+
 	// Check for standard <get> operation
-	// A more robust solution would use proper XML parsing to identify the operation.
-	// This checks if the request starts with <rpc and contains <get>...</get>
-	if bytes.HasPrefix(request, []byte("<rpc")) && bytes.Contains(request, []byte("<get>")) && bytes.Contains(request, []byte("</get>")) {
+	if bytes.HasPrefix(rpcQuery, []byte("<rpc")) && bytes.Contains(rpcQuery, []byte("<get>")) && bytes.Contains(rpcQuery, []byte("</get>")) {
 		// It's a <get> operation. Check for specific filters.
 		if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\"", handlers.VlanNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get> with VLAN filter. Message ID: %s", msgID)
 			return handlers.BuildGetVlansResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<interfaces xmlns=\"%s\"", handlers.InterfaceNamespace))) {
-			// Check for interface filter
 			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get> with Interface filter. Message ID: %s", msgID)
 			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-			// Note: handlers.InterfaceNamespace needs to be exported from the handlers package or defined here.
-			// Assuming it's exported from handlers/interface.go (which it is in your provided file).
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\"", handlers.SshConfigNamespace))) {
+			// Simplified check: if the ssh-server-config tag with the correct namespace is present.
+			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get> with SSH filter. Message ID: %s", msgID)
+			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 
 		}
 		// If it's a <get> but not for VLANs as per the filter above, it's unhandled by this specific logic.
 		log.Printf("NETCONF_SERVER: Received <get> operation with an unhandled filter. Message ID: %s. Request: %s", msgID, string(request))
 		return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "The <get> operation with the specified filter is not supported.")
 
-	} else if bytes.Contains(request, []byte("<edit-config")) {
+	} else if bytes.HasPrefix(rpcQuery, []byte("<rpc")) && bytes.Contains(rpcQuery, []byte("<get-config>")) && bytes.Contains(rpcQuery, []byte("</get-config>")) {
+		// It's a <get-config> operation. Check for specific filters.
+		if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\"", handlers.VlanNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get-config> with VLAN filter. Message ID: %s", msgID)
+			return handlers.BuildGetVlansResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<interfaces xmlns=\"%s\"", handlers.InterfaceNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get-config> with Interface filter. Message ID: %s", msgID)
+			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\"", handlers.SshConfigNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get-config> with SSH filter. Message ID: %s", msgID)
+			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		}
+		log.Printf("NETCONF_SERVER: Received <get-config> operation with an unhandled filter. Message ID: %s. Request: %s", msgID, string(request))
+		return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "The <get-config> operation with the specified filter is not supported.")
+
+	} else if bytes.HasPrefix(rpcQuery, []byte("<rpc")) && bytes.Contains(rpcQuery, []byte("<edit-config")) {
 		if handler, ok := rpcHandlers["edit-config"]; ok {
+			// The original 'request' is passed to the handler as it might need the full message including XML declaration for some parsing.
 			return handler(appConfig.MiyagiSocketPath, appConfig.FrameEnd, request, msgID)
 		}
 		// If <edit-config> is present but doesn't match the handler's internal checks (e.g. for <vlans>),
