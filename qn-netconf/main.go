@@ -30,9 +30,11 @@ var rpcHandlers map[string]RPCHandler
 func init() {
 	// Initialize RPC handlers map
 	rpcHandlers = map[string]RPCHandler{
-		"get-vlans": func(miyagiSocketPath, frameEnd string, request []byte, msgID string) []byte {
-			return handlers.BuildGetVlansResponse(miyagiSocketPath, msgID, frameEnd)
-		},
+		// "get-vlans" was a custom RPC. Standard <get> with filter is now handled directly in generateResponse.
+		// If you still need a custom <get-vlans> operation for other purposes, you can uncomment and keep this.
+		// "get-vlans": func(miyagiSocketPath, frameEnd string, request []byte, msgID string) []byte {
+		// 	return handlers.BuildGetVlansResponse(miyagiSocketPath, msgID, frameEnd)
+		// },
 		"edit-config": func(miyagiSocketPath, frameEnd string, request []byte, msgID string) []byte {
 			// More specific dispatch for edit-config can be done here if needed
 			if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\">", handlers.VlanNamespace))) {
@@ -40,7 +42,7 @@ func init() {
 			}
 			// Add other edit-config handlers based on content/namespace
 			log.Printf("NETCONF_SERVER: Received <edit-config> for unknown model or malformed VLAN config: %s", string(request))
-			return buildOKResponse(frameEnd, msgID)
+			return buildErrorResponse(frameEnd, msgID, "operation-failed", "Unsupported configuration target in edit-config")
 		},
 		// Example for a new handler (see Step 5)
 		// "get-interfaces": handleGetInterfaces,
@@ -215,11 +217,13 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
 <hello xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
   <capabilities>
     <capability>urn:ietf:params:netconf:base:1.0</capability>
-    <capability>%s</capability> <!-- Use VlanNamespace from handlers -->
+    <capability>%s</capability> <!-- VLAN Capability -->
+    <capability>%s</capability> <!-- Interface Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
-%s`, handlers.VlanNamespace, sessionID, appConfig.FrameEnd)
+%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, sessionID, appConfig.FrameEnd)
+	// Added handlers.InterfaceNamespace to advertise interface capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
 		return fmt.Errorf("failed to send server hello: %w", err)
@@ -256,22 +260,37 @@ func generateSessionID() string {
 func generateResponse(request []byte) []byte {
 	msgID := extractMessageID(request)
 
-	// Basic RPC name extraction (can be improved with proper XML parsing)
-	// This is a simplified example. A robust solution would parse the XML properly.
-	if bytes.Contains(request, []byte("<get-vlans")) {
-		if handler, ok := rpcHandlers["get-vlans"]; ok {
-			return handler(appConfig.MiyagiSocketPath, appConfig.FrameEnd, request, msgID)
+	// Check for standard <get> operation
+	// A more robust solution would use proper XML parsing to identify the operation.
+	// This checks if the request starts with <rpc and contains <get>...</get>
+	if bytes.HasPrefix(request, []byte("<rpc")) && bytes.Contains(request, []byte("<get>")) && bytes.Contains(request, []byte("</get>")) {
+		// It's a <get> operation. Check for specific filters.
+		if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\"", handlers.VlanNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get> with VLAN filter. Message ID: %s", msgID)
+			return handlers.BuildGetVlansResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<interfaces xmlns=\"%s\"", handlers.InterfaceNamespace))) {
+			// Check for interface filter
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get> with Interface filter. Message ID: %s", msgID)
+			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Note: handlers.InterfaceNamespace needs to be exported from the handlers package or defined here.
+			// Assuming it's exported from handlers/interface.go (which it is in your provided file).
+
 		}
+		// If it's a <get> but not for VLANs as per the filter above, it's unhandled by this specific logic.
+		log.Printf("NETCONF_SERVER: Received <get> operation with an unhandled filter. Message ID: %s. Request: %s", msgID, string(request))
+		return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "The <get> operation with the specified filter is not supported.")
+
 	} else if bytes.Contains(request, []byte("<edit-config")) {
 		if handler, ok := rpcHandlers["edit-config"]; ok {
 			return handler(appConfig.MiyagiSocketPath, appConfig.FrameEnd, request, msgID)
 		}
-	} // Add more else if blocks for other RPCs or use a more sophisticated XML parser to get the RPC name
+		// If <edit-config> is present but doesn't match the handler's internal checks (e.g. for <vlans>),
+		// the handler itself (defined in init()) returns an error or OK.
+	}
 
 	log.Printf("NETCONF_SERVER: Received unhandled RPC or malformed request: %s", string(request))
-	return buildOKResponse(appConfig.FrameEnd, msgID) // Default to OK for unhandled or simple RPCs
+	return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "Operation not supported or request malformed.")
 }
-
 func extractMessageID(request []byte) string {
 	if i := bytes.Index(request, []byte(`message-id="`)); i > -1 {
 		request = request[i+12:]
@@ -282,13 +301,25 @@ func extractMessageID(request []byte) string {
 	return "1"
 }
 
-func buildOKResponse(frameEnd string, msgID string) []byte {
+// buildErrorResponse is a generic helper to construct an rpc-error reply.
+// This can be used by main.go for dispatch errors or unhandled operations.
+func buildErrorResponse(frameEnd string, msgID string, errTag string, errMsg string) []byte {
+	// Basic XML escaping for the error message
+	escapedErrMsg := strings.ReplaceAll(errMsg, "<", "&lt;")
+	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, ">", "&gt;")
+	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, "&", "&amp;")
+
 	return []byte(fmt.Sprintf(
 		`<?xml version="1.0" encoding="UTF-8"?>
 <rpc-reply message-id="%s" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <ok/>
+  <rpc-error>
+    <error-type>application</error-type>
+    <error-tag>%s</error-tag>
+    <error-severity>error</error-severity>
+    <error-message xml:lang="en">%s</error-message>
+  </rpc-error>
 </rpc-reply>
-%s`, msgID, frameEnd,
+%s`, msgID, errTag, escapedErrMsg, frameEnd,
 	))
 }
 
