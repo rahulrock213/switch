@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"qn-netconf/handlers"
+	"qn-netconf/utils" // Import the new utils package
 
 	"golang.org/x/crypto/ssh"
 )
@@ -139,9 +140,14 @@ func loadHostKey(config *ssh.ServerConfig, path string) error {
 }
 
 func passwordCallback(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-	// In a production system, use more secure authentication
-	// For example, integrate with an AAA server or use public key authentication primarily.
-	if conn.User() == "admin" && string(password) == "admin" {
+	// Use the new SNMP-based authentication
+	authenticated, err := utils.ValidateCredentials(conn.User(), string(password))
+	if err != nil {
+		// Log the internal error but return a generic auth failed to the client
+		log.Printf("NETCONF_SERVER: Authentication internal error for user %s: %v", conn.User(), err)
+		return nil, fmt.Errorf("authentication failed")
+	}
+	if authenticated {
 		return nil, nil
 	}
 	return nil, fmt.Errorf("authentication failed for user %s", conn.User())
