@@ -47,6 +47,10 @@ func init() {
 				return handlers.HandleRouteEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\">", handlers.IpInterfaceNamespace))) {
 				return handlers.HandleIpInterfaceEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<port-configurations xmlns=\"%s\">", handlers.PortConfigNamespace))) {
+				return handlers.HandlePortConfigurationEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<stp-global-config xmlns=\"%s\">", handlers.StpGlobalConfigNamespace))) {
+				return handlers.HandleStpEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			}
 
 			// Add other edit-config handlers based on content/namespace
@@ -232,11 +236,13 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>%s</capability> <!-- Telnet Server Config Capability -->
     <capability>%s</capability> <!-- Routing Capability -->
     <capability>%s</capability> <!-- IP Interface Capability -->
+    <capability>%s</capability> <!-- Port Configuration Capability -->
+    <capability>%s</capability> <!-- STP Global Configuration Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
-%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, handlers.RoutingNamespace, handlers.IpInterfaceNamespace, sessionID, appConfig.FrameEnd)
-	// Added handlers.IpInterfaceNamespace to advertise IP Interface capability
+%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, handlers.RoutingNamespace, handlers.IpInterfaceNamespace, handlers.PortConfigNamespace, handlers.StpGlobalConfigNamespace, sessionID, appConfig.FrameEnd)
+	// Added handlers.StpGlobalConfigNamespace to advertise STP Global Configuration capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
 		return fmt.Errorf("failed to send server hello: %w", err)
@@ -327,6 +333,12 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\"", handlers.IpInterfaceNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get> with IP Interface filter. Message ID: %s", msgID)
 			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<port-configurations xmlns=\"%s\"", handlers.PortConfigNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandlePortConfigurationGetConfig for <get> with Port Configuration filter. Message ID: %s", msgID)
+			return handlers.HandlePortConfigurationGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<stp-global-config xmlns=\"%s\"", handlers.StpGlobalConfigNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleStpGetConfig for <get> with STP Global filter. Message ID: %s", msgID)
+			return handlers.HandleStpGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 			// } else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
 			// 	log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with Routing filter. Message ID: %s", msgID)
 			// 	return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd) // Placeholder if GET is implemented
