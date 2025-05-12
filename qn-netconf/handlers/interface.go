@@ -142,7 +142,7 @@ func BuildGetInterfacesResponse(miyagiSocketPath, msgID, frameEnd string) []byte
 			"uid": "Agent.Switch.Get.General.AllInterfaces", // This is the Miyagi method
 			"arg": nil,
 		},
-		ID: 2, // Use a different ID or a generator
+		ID: 2, // Static ID for this Miyagi request
 	}
 
 	miyagiResp, err := miyagi.SendRequest(miyagiSocketPath, miyagiReq)
