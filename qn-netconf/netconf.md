@@ -95,11 +95,10 @@ Turns on the SSH server.
 
 
 ```xml
-<rpc message-id="121" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <ssh-server-config xmlns="urn:example:params:xml:ns:yang:ssh-server-config">
+      <ssh-server-config xmlns="yang:set_ssh">
         <enabled>true</enabled>
       </ssh-server-config>
     </config>
@@ -113,11 +112,10 @@ Turns off the SSH server.
 
 
 ```xml
-<rpc message-id="122" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <ssh-server-config xmlns="urn:example:params:xml:ns:yang:ssh-server-config">
+      <ssh-server-config xmlns="yang:set_ssh">
         <enabled>false</enabled>
       </ssh-server-config>
     </config>
@@ -137,15 +135,12 @@ Checks if the Telnet server is currently enabled or disabled.
 
 
 ```xml
-<rpc message-id="130" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <get-config>
-    <source><running/></source>
-    <filter type="subtree">
-      <telnet-server-config xmlns="urn:example:params:xml:ns:yang:telnet-server-config"/>
-    </filter>
-  </get-config>
-</rpc>
-]]>]]>
+<rpc>
+  <get>
+    <telnet-server-config xmlns="yang:get_telnet"/>
+  </get>
+ </rpc>
+ ]]>]]>
 ```
 
 ### Enable Telnet

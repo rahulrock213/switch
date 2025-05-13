@@ -17,20 +17,15 @@ const NetconfBaseNamespaceTelnet = "urn:ietf:params:xml:ns:netconf:base:1.0"
 // --- Common NETCONF XML Data Structures (for Telnet handler) ---
 
 type RpcReplyTelnet struct {
-	XMLName   xml.Name         `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
-	MessageID string           `xml:"message-id,attr"`
-	Data      *DataTelnet      `xml:"data,omitempty"`
-	Ok        *OkTelnet        `xml:"ok,omitempty"`
-	Errors    []RPCErrorTelnet `xml:"rpc-error,omitempty"`
+	// Simplified RpcReply structure
+	XMLName      xml.Name                `xml:"rpc-reply"`
+	TelnetConfig *TelnetServerConfigData `xml:"telnet-server-config,omitempty"` // For GET response
+	Ok           *OkTelnet               `xml:"ok,omitempty"`                   // For edit-config response
+	Errors       []RPCErrorTelnet        `xml:"rpc-error,omitempty"`
 }
 
-type OkTelnet struct {
+type OkTelnet struct { // Remains the same
 	XMLName xml.Name `xml:"ok"`
-}
-
-type DataTelnet struct {
-	XMLName      xml.Name                `xml:"data"`
-	TelnetConfig *TelnetServerConfigData `xml:"telnet-server-config,omitempty"`
 }
 
 type RPCErrorTelnet struct {
@@ -45,8 +40,9 @@ type RPCErrorTelnet struct {
 
 // TelnetServerConfigData is used for <telnet-server-config> in <data> or <config>
 type TelnetServerConfigData struct {
+	// XMLName made namespace-agnostic for flexible unmarshalling in edit-config.
+	// Namespace will be explicitly set when marshalling for GET response.
 	XMLName xml.Name `xml:"telnet-server-config"`
-	Xmlns   string   `xml:"xmlns,attr,omitempty"`
 	Enabled *bool    `xml:"enabled,omitempty"` // Use pointer to distinguish not present vs. explicit false
 }
 
@@ -91,15 +87,13 @@ func HandleTelnetGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 	telnetEnabled := miyagiStatusInt == 1
 
 	telnetConfigPayload := TelnetServerConfigData{
-		Xmlns:   TelnetConfigNamespace,
+		// Explicitly set XMLName with desired namespace for GET response
+		XMLName: xml.Name{Space: "yang:telnet", Local: "telnet-server-config"},
 		Enabled: &telnetEnabled,
 	}
 
 	reply := RpcReplyTelnet{
-		MessageID: msgID,
-		Data: &DataTelnet{
-			TelnetConfig: &telnetConfigPayload,
-		},
+		TelnetConfig: &telnetConfigPayload, // Directly embed
 	}
 	return marshalToXMLTelnet(reply, frameEnd)
 }
@@ -151,7 +145,10 @@ func HandleTelnetEditConfig(miyagiSocketPath string, request []byte, msgID, fram
 		return buildErrorResponseBytesTelnet(msgID, "application", "operation-failed", errMsg, frameEnd)
 	}
 
-	reply := RpcReplyTelnet{MessageID: msgID, Ok: &OkTelnet{}}
+	reply := RpcReplyTelnet{
+		// MessageID is no longer part of RpcReplyTelnet
+		Ok: &OkTelnet{},
+	}
 	return marshalToXMLTelnet(reply, frameEnd)
 }
 
@@ -175,7 +172,7 @@ func buildErrorResponseBytesTelnet(msgID, errType, errTag, errMsg, frameEnd stri
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, "&", "&amp;")
 
 	reply := RpcReplyTelnet{
-		MessageID: msgID,
+		// MessageID is no longer part of RpcReplyTelnet
 		Errors: []RPCErrorTelnet{
 			{
 				ErrorType:     errType,
