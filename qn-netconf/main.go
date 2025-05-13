@@ -73,9 +73,15 @@ func init() {
 			} else if bytes.Contains(request, []byte("<routing xmlns=\"yang:set_route\">")) {
 				log.Printf("NETCONF_SERVER: Dispatching to HandleRouteEditConfig with custom 'yang:set_route' namespace. Message ID: %s", msgID)
 				return handlers.HandleRouteEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte("<ip-interfaces xmlns=\"yang:set_ip_interface\">")) {
+				log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceEditConfig with custom 'yang:set_ip_interface' namespace. Message ID: %s", msgID)
+				return handlers.HandleIpInterfaceEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\">", handlers.IpInterfaceNamespace))) {
 				return handlers.HandleIpInterfaceEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<port-configurations xmlns=\"%s\">", handlers.PortConfigNamespace))) {
+				return handlers.HandlePortConfigurationEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte("<port-channels xmlns=\"yang:set_port_channel\">")) {
+				log.Printf("NETCONF_SERVER: Dispatching to HandleLagEditConfig with custom 'yang:set_port_channel' namespace. Message ID: %s", msgID)
 				return handlers.HandlePortConfigurationEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<stp-global-config xmlns=\"%s\">", handlers.StpGlobalConfigNamespace))) {
 				return handlers.HandleStpEditConfig(miyagiSocketPath, request, msgID, frameEnd)
@@ -380,6 +386,22 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get> with original Routing filter. Message ID: %s", msgID)
 			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// IP Interface checks for <get>
+		} else if bytes.Contains(request, []byte("<ip-interfaces")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_ip_interface\"")) || bytes.Contains(request, []byte("xmlns='yang:get_ip_interface'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get> with custom 'yang:get_ip_interface' namespace. Message ID: %s", msgID)
+			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\"", handlers.IpInterfaceNamespace))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get> with original IP Interface filter. Message ID: %s", msgID)
+			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Port Channel checks for <get>
+		} else if bytes.Contains(request, []byte("<port-channels")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_port_channel\"")) || bytes.Contains(request, []byte("xmlns='yang:get_port_channel'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleLagGetConfig for <get> with custom 'yang:get_port_channel' namespace. Message ID: %s", msgID)
+			return handlers.HandleLagGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<port-configurations xmlns=\"%s\"", handlers.PortConfigNamespace))) { // Existing physical port get
+			log.Printf("NETCONF_SERVER: Dispatching to HandlePortConfigurationGetConfig for <get> with Port Configuration filter. Message ID: %s", msgID)
+			return handlers.HandlePortConfigurationGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 
 		}
 		// If it's a <get> but not for VLANs as per the filter above, it's unhandled by this specific logic.
@@ -427,6 +449,13 @@ func generateResponse(request []byte) []byte {
 			(bytes.Contains(request, []byte("xmlns=\"yang:get_route\"")) || bytes.Contains(request, []byte("xmlns='yang:get_route'"))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with custom 'yang:get_route' namespace. Message ID: %s", msgID)
 			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) { // Fallback for original routing namespace
+			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with original Routing filter. Message ID: %s", msgID)
+			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte("<port-channels")) && // Port Channel get-config
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_port_channel\"")) || bytes.Contains(request, []byte("xmlns='yang:get_port_channel'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleLagGetConfig for <get-config> with custom 'yang:get_port_channel' namespace. Message ID: %s", msgID)
+			return handlers.HandleLagGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\"", handlers.IpInterfaceNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get-config> with IP Interface filter. Message ID: %s", msgID)
 			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
@@ -436,9 +465,14 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<stp-global-config xmlns=\"%s\"", handlers.StpGlobalConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleStpGetConfig for <get-config> with STP Global filter. Message ID: %s", msgID)
 			return handlers.HandleStpGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-		} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
-			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with original Routing filter. Message ID: %s", msgID)
-			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// IP Interface checks for <get-config> (short namespace)
+		} else if bytes.Contains(request, []byte("<ip-interfaces")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_ip_interface\"")) || bytes.Contains(request, []byte("xmlns='yang:get_ip_interface'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get-config> with custom 'yang:get_ip_interface' namespace. Message ID: %s", msgID)
+			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<port-configurations xmlns=\"%s\"", handlers.PortConfigNamespace))) { // Existing physical port get-config
+			log.Printf("NETCONF_SERVER: Dispatching to HandlePortConfigurationGetConfig for <get-config> with Port Configuration filter. Message ID: %s", msgID)
+			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		}
 		log.Printf("NETCONF_SERVER: Received <get-config> operation with an unhandled filter. Message ID: %s. Request: %s", msgID, string(request))
 		return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "The <get-config> operation with the specified filter is not supported.")

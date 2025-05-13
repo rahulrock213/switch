@@ -18,21 +18,20 @@ const NetconfBaseNamespaceIpInterface = "urn:ietf:params:xml:ns:netconf:base:1.0
 // --- Common NETCONF XML Data Structures ---
 
 type RpcReplyIpInterface struct {
-	XMLName   xml.Name              `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
-	MessageID string                `xml:"message-id,attr"`
-	Data      *DataIpInterface      `xml:"data,omitempty"`
-	Ok        *OkIpInterface        `xml:"ok,omitempty"`
-	Errors    []RPCErrorIpInterface `xml:"rpc-error,omitempty"`
+	// Simplified RpcReply for edit-config responses
+	XMLName xml.Name `xml:"rpc-reply"`
+	// MessageID removed
+	// Data field removed as GET is custom and edit-config only needs Ok/Error
+	Ok     *OkIpInterface        `xml:"ok,omitempty"`
+	Errors []RPCErrorIpInterface `xml:"rpc-error,omitempty"`
 }
 
 type OkIpInterface struct {
 	XMLName xml.Name `xml:"ok"`
 }
 
-type DataIpInterface struct {
-	XMLName xml.Name `xml:"data"`
-	// IpInterfacesData *IpInterfacesData `xml:"ip-interfaces,omitempty"` // No longer used for GET custom output
-}
+// DataIpInterface struct is no longer used for the simplified GET/edit-config paths.
+// If it were used for a standard <get-config> response, it would be defined here.
 
 type RPCErrorIpInterface struct {
 	XMLName       xml.Name `xml:"rpc-error"`
@@ -46,8 +45,9 @@ type RPCErrorIpInterface struct {
 
 // IpInterfacesData is the container for multiple IP interface configurations
 type IpInterfacesData struct {
-	XMLName    xml.Name          `xml:"ip-interfaces"`
-	Xmlns      string            `xml:"xmlns,attr,omitempty"`
+	// XMLName made namespace-agnostic for flexible unmarshalling in edit-config.
+	XMLName xml.Name `xml:"ip-interfaces"` // For edit-config unmarshalling
+	// Xmlns attribute removed, namespace handled by request content
 	Interfaces []IpInterfaceData `xml:"interface"`
 }
 
@@ -76,7 +76,8 @@ type MiyagiIpDetail struct {
 
 // --- Custom XML Output Structures for Get IP Interface ---
 type XmlResultRootIp struct {
-	XMLName    xml.Name              `xml:"result"`
+	// Changed root tag for custom GET response to rpc-reply
+	XMLName    xml.Name              `xml:"rpc-reply"`
 	Interfaces []XmlIpInterfaceEntry `xml:",innerxml"` // Custom marshalling for dynamic tags
 }
 
@@ -104,6 +105,27 @@ func (r XmlResultRootIp) MarshalXML(e *xml.Encoder, start xml.StartElement) erro
 		}
 	}
 	return e.EncodeToken(xml.EndElement{Name: start.Name})
+}
+
+// marshalIpInterfaceEntries is a helper to marshal only the list of XmlIpInterfaceEntry
+// using the custom logic for dynamic tags.
+func marshalIpInterfaceEntries(interfaces []XmlIpInterfaceEntry, prefix string, indent string) ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := xml.NewEncoder(&buf)
+	if prefix == "" && indent != "" { // Apply indent if specified
+		encoder.Indent("", indent)
+	}
+
+	for _, iface := range interfaces {
+		// Encode each interface using its dynamic name (iface.XMLName)
+		if err := encoder.EncodeElement(iface, xml.StartElement{Name: iface.XMLName}); err != nil {
+			return nil, fmt.Errorf("failed to encode IP interface %s: %w", iface.XMLName.Local, err)
+		}
+	}
+	if err := encoder.Flush(); err != nil {
+		return nil, fmt.Errorf("failed to flush encoder for IP interface entries: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 // --- Handler Functions ---
@@ -172,18 +194,27 @@ func HandleIpInterfaceGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte
 		xmlIpEntries = append(xmlIpEntries, entry)
 	}
 
-	xmlRoot := XmlResultRootIp{
-		Interfaces: xmlIpEntries,
-	}
-
-	xmlBytes, err := xml.MarshalIndent(xmlRoot, "", "    ") // Indent with 4 spaces
+	// --- Direct Construction of XML with <rpc-reply> root ---
+	innerXmlBytes, err := marshalIpInterfaceEntries(xmlIpEntries, "", "  ") // Using 2 spaces for indent to match others
 	if err != nil {
-		log.Printf("NETCONF_IP_IF_HANDLER: Error marshalling custom IP interface XML: %v", err)
-		return []byte(fmt.Sprintf("<?xml version=\"1.0\" encoding=\"UTF-8\"?><error>Error generating XML response: %v</error>", err))
+		log.Printf("NETCONF_IP_IF_HANDLER: Error marshalling inner IP interface XML: %v", err)
+		// For custom XML, we might return a simpler error or an empty <rpc-reply/>
+		return []byte(fmt.Sprintf("<?xml version=\"1.0\" encoding=\"UTF-8\"?><rpc-reply><error>Error generating inner XML content for IP interfaces: %v</error></rpc-reply>", err))
 	}
 
-	// Prepend XML declaration, similar to interface.go's custom XML
-	return append([]byte(xml.Header), xmlBytes...)
+	var fullResponse bytes.Buffer
+	fullResponse.WriteString(xml.Header)
+	fullResponse.WriteString("<rpc-reply>") // Manually write the desired root tag
+	if len(innerXmlBytes) > 0 {
+		// Add a newline if there's content, for pretty printing.
+		// The innerXmlBytes are already indented.
+		// fullResponse.WriteString("\n") // Optional: if you want the first inner element on a new line
+		fullResponse.Write(innerXmlBytes)
+	}
+	// fullResponse.WriteString("\n") // Optional: if you want the closing tag on a new line
+	fullResponse.WriteString("</rpc-reply>")
+
+	return fullResponse.Bytes()
 }
 
 // HandleIpInterfaceEditConfig handles <edit-config> for setting IP interface properties
@@ -248,7 +279,10 @@ func HandleIpInterfaceEditConfig(miyagiSocketPath string, request []byte, msgID,
 		// If processing multiple, continue. Stop on first error for simplicity.
 	}
 
-	reply := RpcReplyIpInterface{MessageID: msgID, Ok: &OkIpInterface{}}
+	reply := RpcReplyIpInterface{
+		// MessageID is no longer part of RpcReplyIpInterface
+		Ok: &OkIpInterface{},
+	}
 	return marshalToXMLIpInterface(reply, frameEnd)
 }
 
@@ -258,18 +292,20 @@ func marshalToXMLIpInterface(data interface{}, frameEnd string) []byte {
 	xmlBytes, err := xml.MarshalIndent(data, "", "  ")
 	if err != nil {
 		log.Printf("NETCONF_IP_IF_HANDLER: FATAL: Failed to marshal XML: %v", err)
+		// Fallback error, ensuring it's also simple
 		return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><rpc-reply xmlns="%s"><rpc-error><error-type>application</error-type><error-tag>internal-error</error-tag><error-severity>error</error-severity><error-message>Internal server error during XML generation</error-message></rpc-error></rpc-reply>%s`, NetconfBaseNamespaceIpInterface, frameEnd))
 	}
 	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
 }
 
 func buildErrorResponseBytesIpInterface(msgID, errType, errTag, errMsg, frameEnd string) []byte {
+	// msgID is kept for logging/internal tracking but won't be in the simplified XML error response
 	escapedErrMsg := strings.ReplaceAll(errMsg, "<", "&lt;")
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, ">", "&gt;")
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, "&", "&amp;")
 	reply := RpcReplyIpInterface{
-		MessageID: msgID,
-		Errors:    []RPCErrorIpInterface{{ErrorType: errType, ErrorTag: errTag, ErrorSeverity: "error", ErrorMessage: escapedErrMsg}},
+		// MessageID is no longer part of RpcReplyIpInterface
+		Errors: []RPCErrorIpInterface{{ErrorType: errType, ErrorTag: errTag, ErrorSeverity: "error", ErrorMessage: escapedErrMsg}},
 	}
 	return marshalToXMLIpInterface(reply, frameEnd)
 }

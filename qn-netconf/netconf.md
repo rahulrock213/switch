@@ -239,13 +239,10 @@ Retrieves the IP address configuration for all interfaces that have an IP addres
 
 
 ```xml
-<rpc message-id="150" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <get-config>
-    <source><running/></source>
-    <filter type="subtree">
-      <ip-interfaces xmlns="urn:example:params:xml:ns:yang:ip-interface"/>
-    </filter>
-  </get-config>
+<rpc>
+  <get>
+      <ip-interfaces xmlns="yang:get_ip_interface"/>
+  </get>
 </rpc>
 ]]>]]>
 ```
@@ -254,12 +251,11 @@ Retrieves the IP address configuration for all interfaces that have an IP addres
 Assigns an IP address and subnet mask to a specified interface. The `operation="create"` attribute is used here to define a new IP address configuration on the interface. If an IP configuration already exists, this might update it or add a secondary address depending on the device's behavior (often, `merge` or `replace` operations are used for updates).
 
 ```xml
-<rpc message-id="151" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <ip-interfaces xmlns="urn:example:params:xml:ns:yang:ip-interface">
-        <interface operation="create">
+      <ip-interfaces xmlns="yang:set_ip_interface">
+        <interface>
           <name>te1/0/1</name>
           <ip-address>131.108.1.27</ip-address>
           <mask-prefix>255.255.255.0</mask-prefix>
