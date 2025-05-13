@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,18 +18,27 @@ const NetconfBaseNamespacePortConfig = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures ---
 type RpcReplyPortConfig struct {
-	XMLName   xml.Name             `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
-	MessageID string               `xml:"message-id,attr"`
-	Data      *DataPortConfig      `xml:"data,omitempty"`
-	Ok        *OkPortConfig        `xml:"ok,omitempty"`
-	Errors    []RPCErrorPortConfig `xml:"rpc-error,omitempty"`
+	// Simplified for generic <ok/>, <error>, and custom GET data
+	XMLName xml.Name `xml:"rpc-reply"`
+	// MessageID removed
+	// Data field removed for custom GETs; specific data structs will be embedded or marshalled directly
+	Ok     *OkPortConfig        `xml:"ok,omitempty"`
+	Errors []RPCErrorPortConfig `xml:"rpc-error,omitempty"` // Used for edit-config errors
+	// For custom GET responses, specific data structs will be added here if needed,
+	// or the response will be built as a raw XML string.
+}
+
+// RpcReplyPortConfigGetData is specifically for the GET physical port configurations response
+type RpcReplyPortConfigGetData struct {
+	XMLName xml.Name        `xml:"rpc-reply"` // Simplified root
+	Data    *DataPortConfig `xml:"data,omitempty"`
 }
 
 type OkPortConfig struct {
 	XMLName xml.Name `xml:"ok"`
 }
 
-type DataPortConfig struct {
+type DataPortConfig struct { // This is used by the original HandlePortConfigurationGetConfig for physical ports
 	XMLName            xml.Name            `xml:"data"`
 	PortConfigurations *PortConfigurations `xml:"port-configurations,omitempty"`
 }
@@ -41,10 +51,11 @@ type RPCErrorPortConfig struct {
 	ErrorMessage  string   `xml:"error-message"`
 }
 
-// --- Port Configuration Specific XML Data Structures ---
+// --- Physical Port Configuration Specific XML Data Structures ---
 
 type PortConfigurations struct {
-	XMLName xml.Name          `xml:"port-configurations"`
+	// XMLName made namespace-agnostic for edit-config unmarshalling.
+	XMLName xml.Name          `xml:"port-configurations"` // For edit-config unmarshalling
 	Xmlns   string            `xml:"xmlns,attr,omitempty"`
 	Ports   []PortConfigEntry `xml:"port"`
 }
@@ -84,9 +95,65 @@ type TrunkVlanInfo struct {
 // 	Enabled *bool    `xml:"enabled,omitempty"`
 // }
 
+// --- Port Channel (LAG) Specific XML Data Structures ---
+
+// For GET Port Channels Response
+type LagGetResponseRoot struct {
+	XMLName      xml.Name              `xml:"rpc-reply"`
+	PortChannels []LagEntryGetResponse `xml:"port-channel"`
+}
+
+type LagEntryGetResponse struct {
+	XMLName  xml.Name `xml:"port-channel"`
+	Name     string   `xml:"name"`
+	LacpMode string   `xml:"lacp-mode,omitempty"`
+	Members  *Members `xml:"members,omitempty"`
+	// Status    string   `xml:"status,omitempty"` // Optional: if Miyagi provides it
+}
+
+type Members struct {
+	Member []string `xml:"member"`
+}
+
+// For Edit-Config Port Channels Request
+type EditConfigLagPayload struct {
+	XMLName           xml.Name              `xml:"config"`
+	LagConfigurations LagConfigurationsEdit `xml:"port-channels"`
+}
+
+type LagConfigurationsEdit struct {
+	XMLName      xml.Name       `xml:"port-channels"` // Namespace will be on this tag in request
+	PortChannels []LagEntryEdit `xml:"port-channel"`
+}
+
+type LagEntryEdit struct {
+	XMLName   xml.Name        `xml:"port-channel"`
+	Operation string          `xml:"operation,attr"` // create, delete, modify
+	Name      string          `xml:"name"`
+	LacpMode  *string         `xml:"lacp-mode,omitempty"` // active, passive, on
+	Members   *LagMembersEdit `xml:"members,omitempty"`
+}
+
+type LagMembersEdit struct {
+	Member []LagMemberEdit `xml:"member"`
+}
+
+type LagMemberEdit struct {
+	XMLName   xml.Name `xml:"member"`
+	Operation string   `xml:"operation,attr,omitempty"` // add, remove
+	Value     string   `xml:",chardata"`
+}
+
+// Miyagi specific structs for Port Channels
+type MiyagiLagDetail struct {
+	Members  []string `json:"members"`
+	LacpMode string   `json:"lacp_mode"`
+	// Status string `json:"status"` // if available
+}
+
 // --- Handler Functions ---
 
-// HandlePortConfigurationEditConfig handles <edit-config> for port configurations
+// HandlePortConfigurationEditConfig handles <edit-config> for physical port configurations
 func HandlePortConfigurationEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd string) []byte {
 	var editReq struct {
 		XMLName            xml.Name           `xml:"config"`
@@ -202,11 +269,15 @@ func HandlePortConfigurationEditConfig(miyagiSocketPath string, request []byte, 
 		// STP Configuration removed
 	}
 
-	reply := RpcReplyPortConfig{MessageID: msgID, Ok: &OkPortConfig{}}
+	reply := RpcReplyPortConfig{
+		// MessageID removed
+		Ok: &OkPortConfig{},
+	}
 	return marshalToXMLPortConfig(reply, frameEnd)
 }
 
-// HandlePortConfigurationGetConfig handles <get-config> for port configurations
+// HandlePortConfigurationGetConfig handles <get-config> for physical port configurations
+// This function returns a standard NETCONF reply with <data> wrapper.
 func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 	miyagiAllIntReq := miyagi.MiyagiRequest{
 		Method: "call",
@@ -215,21 +286,41 @@ func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) 
 	}
 
 	miyagiAllIntResp, err := miyagi.SendRequest(miyagiSocketPath, miyagiAllIntReq)
-	if err != nil || miyagiAllIntResp.Error != nil {
+	if err != nil || (miyagiAllIntResp != nil && miyagiAllIntResp.Error != nil) {
 		errMsg := "Error communicating with device agent for AllInterfaces"
 		if err != nil {
 			errMsg = fmt.Sprintf("%s: %v", errMsg, err)
-		} else {
+		} else if miyagiAllIntResp.Error != nil {
 			errMsg = fmt.Sprintf("Device error for AllInterfaces: %s (code: %d)", miyagiAllIntResp.Error.Message, miyagiAllIntResp.Error.Code)
 		}
 		log.Printf("NETCONF_PORT_CFG_HANDLER: %s", errMsg)
-		return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", errMsg, frameEnd)
+		// Use a RpcReplyPortConfig that includes MessageID for standard replies
+		errorReply := struct { // Local struct for standard error reply
+			XMLName   xml.Name             `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
+			MessageID string               `xml:"message-id,attr"`
+			Errors    []RPCErrorPortConfig `xml:"rpc-error,omitempty"`
+		}{
+			MessageID: msgID,
+			Errors:    []RPCErrorPortConfig{{ErrorType: "application", ErrorTag: "operation-failed", ErrorSeverity: "error", ErrorMessage: errMsg}},
+		}
+		xmlBytes, _ := xml.MarshalIndent(errorReply, "", "  ")
+		return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
 	}
 
 	var miyagiInterfaceMap map[string]MiyagiInterfaceDetail // From interface.go
 	if err := json.Unmarshal(miyagiAllIntResp.Result, &miyagiInterfaceMap); err != nil {
 		log.Printf("NETCONF_PORT_CFG_HANDLER: Error unmarshalling AllInterfaces: %v. Raw: %s", err, string(miyagiAllIntResp.Result))
-		return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", "Failed to parse interface data from device", frameEnd)
+		// Use a RpcReplyPortConfig that includes MessageID for standard replies
+		errorReply := struct {
+			XMLName   xml.Name             `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
+			MessageID string               `xml:"message-id,attr"`
+			Errors    []RPCErrorPortConfig `xml:"rpc-error,omitempty"`
+		}{
+			MessageID: msgID,
+			Errors:    []RPCErrorPortConfig{{ErrorType: "application", ErrorTag: "operation-failed", ErrorSeverity: "error", ErrorMessage: "Failed to parse interface data from device"}},
+		}
+		xmlBytes, _ := xml.MarshalIndent(errorReply, "", "  ")
+		return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
 	}
 
 	var portConfigEntries []PortConfigEntry
@@ -250,16 +341,12 @@ func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) 
 		}
 
 		// Speed
-		// Note: Agent.Switch.Get.Interface.Speed might be needed for more accurate current speed
-		// Agent.Switch.Get.General.AllInterfaces might provide configured or operational speed.
-		// For now, using IfSpeed from AllInterfaces.
 		if details.IfSpeed != nil {
-			speedStr := strconv.Itoa(*details.IfSpeed) // Assuming IfSpeed is in Mbps
+			speedStr := strconv.Itoa(*details.IfSpeed)
 			entry.Speed = &speedStr
 		}
 
 		// Description
-		// Note: Agent.Switch.Get.Interface.Description might be needed if IfDescription is not sufficient.
 		if details.IfDescription != "" {
 			entry.Description = &details.IfDescription
 		}
@@ -268,7 +355,7 @@ func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) 
 		swConfig := SwitchportConfig{}
 		changedSw := false
 		if details.PortMode != nil && details.PortMode.Description != "" {
-			mode := strings.ToLower(details.PortMode.Description) // "access" or "trunk"
+			mode := strings.ToLower(details.PortMode.Description)
 			swConfig.Mode = &mode
 			changedSw = true
 
@@ -283,7 +370,7 @@ func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) 
 					for _, v := range details.TaggedVlan {
 						vlanStrings = append(vlanStrings, strconv.Itoa(v))
 					}
-					allowed := strings.Join(vlanStrings, ",") // Consider if Miyagi returns ranges or just list
+					allowed := strings.Join(vlanStrings, ",")
 					trunkInfo.AllowedVlans = &allowed
 					trunkChanged = true
 				}
@@ -299,23 +386,147 @@ func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) 
 		if changedSw {
 			entry.Switchport = &swConfig
 		}
-
-		// STP Status get logic removed
-
 		portConfigEntries = append(portConfigEntries, entry)
 	}
 
 	portConfigurations := PortConfigurations{
-		Xmlns: PortConfigNamespace,
+		Xmlns: "yang:port_config", // Set the desired short namespace for the GET response
 		Ports: portConfigEntries,
 	}
 
-	reply := RpcReplyPortConfig{
-		MessageID: msgID,
+	// Use the new RpcReplyPortConfigGetData for the simplified GET response
+	reply := RpcReplyPortConfigGetData{
+		// XMLName is defined in the struct tag
+		// MessageID is not included in this simplified response
 		Data: &DataPortConfig{
 			PortConfigurations: &portConfigurations,
 		},
 	}
+	// Use marshalToXMLPortConfig, which now handles simplified rpc-reply
+	return marshalToXMLPortConfig(reply, frameEnd)
+}
+
+// HandleLagGetConfig handles <get> for port-channel configurations
+func HandleLagGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
+	miyagiReq := miyagi.MiyagiRequest{
+		Method: "call",
+		Params: map[string]interface{}{"uid": "Agent.Switch.Get.LAG.Table", "arg": nil},
+		ID:     13, // Unique ID
+	}
+
+	miyagiResp, err := miyagi.SendRequest(miyagiSocketPath, miyagiReq)
+	if err != nil || (miyagiResp != nil && miyagiResp.Error != nil) {
+		errMsg := "Error communicating with device agent for LAG table"
+		if err != nil {
+			errMsg = fmt.Sprintf("%s: %v", errMsg, err)
+		} else if miyagiResp.Error != nil {
+			errMsg = fmt.Sprintf("Device error for LAG table: %s (code: %d)", miyagiResp.Error.Message, miyagiResp.Error.Code)
+		}
+		log.Printf("NETCONF_PORT_CFG_HANDLER (LAG): %s", errMsg)
+		return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", errMsg, frameEnd)
+	}
+
+	var miyagiLagTable map[string]MiyagiLagDetail
+	if err := json.Unmarshal(miyagiResp.Result, &miyagiLagTable); err != nil {
+		log.Printf("NETCONF_PORT_CFG_HANDLER (LAG): Error unmarshalling LAG table: %v. Raw: %s", err, string(miyagiResp.Result))
+		return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", "Failed to parse LAG data from device", frameEnd)
+	}
+
+	var lagEntries []LagEntryGetResponse
+	for name, details := range miyagiLagTable {
+		entry := LagEntryGetResponse{
+			Name:     name,
+			LacpMode: details.LacpMode,
+		}
+		if len(details.Members) > 0 {
+			entry.Members = &Members{Member: details.Members}
+		}
+		lagEntries = append(lagEntries, entry)
+	}
+
+	// Sort for consistent output
+	sort.Slice(lagEntries, func(i, j int) bool {
+		return lagEntries[i].Name < lagEntries[j].Name
+	})
+
+	responseRoot := LagGetResponseRoot{PortChannels: lagEntries}
+	xmlBytes, err := xml.MarshalIndent(responseRoot, "", "  ")
+	if err != nil {
+		log.Printf("NETCONF_PORT_CFG_HANDLER (LAG): Error marshalling LAG XML: %v", err)
+		return buildErrorResponseBytesPortConfig(msgID, "application", "internal-error", "Error generating LAG XML response", frameEnd)
+	}
+	// For custom XML, we directly return the marshalled bytes with header and frameEnd
+	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+}
+
+// HandleLagEditConfig handles <edit-config> for port-channel configurations
+func HandleLagEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd string) []byte {
+	var editReq EditConfigLagPayload
+	configStartIndex := bytes.Index(request, []byte("<config>"))
+	configEndIndex := bytes.LastIndex(request, []byte("</config>"))
+	if configStartIndex == -1 || configEndIndex == -1 || configStartIndex >= configEndIndex {
+		return buildErrorResponseBytesPortConfig(msgID, "protocol", "malformed-message", "Malformed <edit-config> for LAG", frameEnd)
+	}
+	configPayload := request[configStartIndex : configEndIndex+len("</config>")]
+
+	if err := xml.Unmarshal(configPayload, &editReq); err != nil {
+		log.Printf("NETCONF_PORT_CFG_HANDLER (LAG): Error unmarshalling <edit-config> payload: %v. Payload: %s", err, string(configPayload))
+		return buildErrorResponseBytesPortConfig(msgID, "protocol", "malformed-message", "Invalid LAG configuration format", frameEnd)
+	}
+
+	for _, pc := range editReq.LagConfigurations.PortChannels {
+		switch pc.Operation {
+		case "create":
+			err := callMiyagiPortConfig(miyagiSocketPath, "Agent.Switch.Set.LAG.Create", map[string]interface{}{"name": pc.Name}, msgID, pc.Name, "LAG create")
+			if err != nil {
+				return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", err.Error(), frameEnd)
+			}
+			if pc.LacpMode != nil {
+				err = callMiyagiPortConfig(miyagiSocketPath, "Agent.Switch.Set.LAG.LACP.Mode", map[string]interface{}{"lag_name": pc.Name, "mode": *pc.LacpMode}, msgID, pc.Name, "LACP mode")
+				if err != nil {
+					return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", err.Error(), frameEnd)
+				}
+			}
+			if pc.Members != nil {
+				for _, member := range pc.Members.Member {
+					if member.Operation == "add" || member.Operation == "" { // Default to add
+						err = callMiyagiPortConfig(miyagiSocketPath, "Agent.Switch.Set.LAG.AddMember", map[string]interface{}{"lag_name": pc.Name, "interface_name": member.Value}, msgID, pc.Name, "add member "+member.Value)
+						if err != nil {
+							return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", err.Error(), frameEnd)
+						}
+					}
+				}
+			}
+		case "delete":
+			err := callMiyagiPortConfig(miyagiSocketPath, "Agent.Switch.Set.LAG.Delete", map[string]interface{}{"name": pc.Name}, msgID, pc.Name, "LAG delete")
+			if err != nil {
+				return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", err.Error(), frameEnd)
+			}
+		case "modify": // For modifying members or LACP mode of an existing LAG
+			if pc.LacpMode != nil {
+				err := callMiyagiPortConfig(miyagiSocketPath, "Agent.Switch.Set.LAG.LACP.Mode", map[string]interface{}{"lag_name": pc.Name, "mode": *pc.LacpMode}, msgID, pc.Name, "LACP mode")
+				if err != nil {
+					return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", err.Error(), frameEnd)
+				}
+			}
+			if pc.Members != nil {
+				for _, member := range pc.Members.Member {
+					uid := "Agent.Switch.Set.LAG.AddMember"
+					if member.Operation == "remove" {
+						uid = "Agent.Switch.Set.LAG.RemoveMember"
+					}
+					err := callMiyagiPortConfig(miyagiSocketPath, uid, map[string]interface{}{"lag_name": pc.Name, "interface_name": member.Value}, msgID, pc.Name, member.Operation+" member "+member.Value)
+					if err != nil {
+						return buildErrorResponseBytesPortConfig(msgID, "application", "operation-failed", err.Error(), frameEnd)
+					}
+				}
+			}
+		default:
+			return buildErrorResponseBytesPortConfig(msgID, "protocol", "bad-attribute", fmt.Sprintf("Unsupported LAG operation: %s", pc.Operation), frameEnd)
+		}
+	}
+
+	reply := RpcReplyPortConfig{Ok: &OkPortConfig{}} // Uses the simplified RpcReplyPortConfig
 	return marshalToXMLPortConfig(reply, frameEnd)
 }
 
@@ -345,10 +556,14 @@ func callMiyagiPortConfig(miyagiSocketPath, uid string, args map[string]interfac
 // --- Helper Functions ---
 func marshalToXMLPortConfig(data interface{}, frameEnd string) []byte {
 	xmlBytes, err := xml.MarshalIndent(data, "", "  ")
+	// For custom GET responses that are already fully formed XML strings, this function might not be used.
+	// This is primarily for RpcReplyPortConfig with Ok or Error.
 	if err != nil {
-		log.Printf("NETCONF_PORT_CFG_HANDLER: FATAL: Failed to marshal XML: %v", err)
-		return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><rpc-reply xmlns="%s"><rpc-error><error-type>application</error-type><error-tag>internal-error</error-tag><error-severity>error</error-severity><error-message>Internal server error during XML generation</error-message></rpc-error></rpc-reply>%s`, NetconfBaseNamespacePortConfig, frameEnd))
+		log.Printf("NETCONF_PORT_CFG_HANDLER: FATAL: Failed to marshal XML for simplified reply: %v", err)
+		// Fallback for simplified rpc-reply
+		return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><rpc-reply><rpc-error><error-type>application</error-type><error-tag>internal-error</error-tag><error-severity>error</error-severity><error-message>Internal server error during XML generation</error-message></rpc-error></rpc-reply>%s`, frameEnd))
 	}
+	// If data is RpcReplyPortConfig (simplified), it won't have xmlns or message-id by default.
 	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
 }
 
@@ -356,9 +571,9 @@ func buildErrorResponseBytesPortConfig(msgID, errType, errTag, errMsg, frameEnd 
 	escapedErrMsg := strings.ReplaceAll(errMsg, "<", "&lt;")
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, ">", "&gt;")
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, "&", "&amp;")
-	reply := RpcReplyPortConfig{
-		MessageID: msgID,
-		Errors:    []RPCErrorPortConfig{{ErrorType: errType, ErrorTag: errTag, ErrorSeverity: "error", ErrorMessage: escapedErrMsg}},
+	reply := RpcReplyPortConfig{ // Uses the simplified RpcReplyPortConfig
+		// MessageID removed
+		Errors: []RPCErrorPortConfig{{ErrorType: errType, ErrorTag: errTag, ErrorSeverity: "error", ErrorMessage: escapedErrMsg}},
 	}
 	return marshalToXMLPortConfig(reply, frameEnd)
 }

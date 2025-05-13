@@ -277,11 +277,10 @@ Sets the administrative status of specified ports to 'up' (enabled) or 'down' (d
 
 
 ```xml
-<rpc message-id="161" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <port-configurations xmlns="urn:example:params:xml:ns:yang:port-config">
+      <port-configurations xmlns="yang:set_port_config">
         <port><name>te1/0/1</name><admin-status>up</admin-status></port>
         <port><name>te1/0/2</name><admin-status>up</admin-status></port>
       </port-configurations>
@@ -296,20 +295,20 @@ Configures the administrative status, adds a descriptive label, and sets the spe
 
 
 ```xml
-<rpc message-id="161" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <port-configurations xmlns="urn:example:params:xml:ns:yang:port-config">
+      <port-configurations xmlns="yang:set_port_config">
         <port>
           <name>te1/0/1</name>
           <admin-status>up</admin-status>
-          <description>Uplink_to_Core_Switch</description>
+          <description>PC</description>
           <speed>10000</speed>
         </port>
         <port>
           <name>te1/0/2</name>
-          <admin-status>down</admin-status>
+          <admin-status>up</admin-status>
+          <description>Core_Switch</description>
         </port>
       </port-configurations>
     </config>
@@ -323,13 +322,12 @@ Sets a port to 'access' mode and assigns it to a specific VLAN. Packets on an ac
 
 
 ```xml
-<rpc message-id="162" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <port-configurations xmlns="urn:example:params:xml:ns:yang:port-config">
+      <port-configurations xmlns="yang:set_port_config">
         <port>
-          <name>te1/0/3</name>
+          <name>te1/0/9</name>
           <switchport>
             <mode>access</mode>
             <access><vlan-id>100</vlan-id></access>
@@ -347,13 +345,12 @@ Sets a port to 'trunk' mode, allowing it to carry traffic for multiple VLANs. Yo
 
 
 ```xml
-<rpc message-id="163" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <port-configurations xmlns="urn:example:params:xml:ns:yang:port-config">
+      <port-configurations xmlns="yang:set_port_config">
         <port>
-          <name>te1/0/4</name>
+          <name>te1/0/5</name>
           <switchport>
             <mode>trunk</mode>
             <trunk>
@@ -374,13 +371,12 @@ Configures Spanning Tree Protocol (STP) on a specific port. This is typically fo
 
 
 ```xml
-<rpc message-id="164" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <port-configurations xmlns="urn:example:params:xml:ns:yang:port-config">
+      <port-configurations xmlns="yang:set_port_config">
         <port>
-          <name>te1/0/5</name>
+          <name>te1/0/6</name>
           <stp><enabled>true</enabled></stp>
         </port>
       </port-configurations>
@@ -401,13 +397,10 @@ Checks if STP is globally enabled or disabled on the device.
 
 
 ```xml
-<rpc message-id="170" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <get-config>
-    <source><running/></source>
-    <filter type="subtree">
-      <stp-global-config xmlns="urn:example:params:xml:ns:yang:stp-global-config"/>
-    </filter>
-  </get-config>
+<rpc>
+  <get>
+    <stp-global-config xmlns="yang:get_stp"/>
+  </get>
 </rpc>
 ]]>]]>
 ```
@@ -417,11 +410,11 @@ Turns on STP for the entire device.
 
 
 ```xml
-<rpc message-id="171" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
     <target><running/></target>
     <config>
-      <stp-global-config xmlns="urn:example:params:xml:ns:yang:stp-global-config">
+      <stp-global-config xmlns="yang:set_stp">
         <enabled>true</enabled>
       </stp-global-config>
     </config>
@@ -435,11 +428,11 @@ Turns off STP for the entire device.
 
 
 ```xml
-<rpc message-id="172" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
     <target><running/></target>
     <config>
-      <stp-global-config xmlns="urn:example:params:xml:ns:yang:stp-global-config">
+      <stp-global-config xmlns="yang:set_stp">
         <enabled>false</enabled>
       </stp-global-config>
     </config>

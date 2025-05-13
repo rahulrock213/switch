@@ -16,20 +16,14 @@ const NetconfBaseNamespaceStp = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures ---
 type RpcReplyStp struct {
-	XMLName   xml.Name      `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
-	MessageID string        `xml:"message-id,attr"`
-	Data      *DataStp      `xml:"data,omitempty"`
-	Ok        *OkStp        `xml:"ok,omitempty"`
-	Errors    []RPCErrorStp `xml:"rpc-error,omitempty"`
+	XMLName         xml.Name             `xml:"rpc-reply"`                   // Simplified root
+	StpGlobalConfig *StpGlobalConfigData `xml:"stp-global-config,omitempty"` // For GET response
+	Ok              *OkStp               `xml:"ok,omitempty"`                // For edit-config response
+	Errors          []RPCErrorStp        `xml:"rpc-error,omitempty"`
 }
 
 type OkStp struct {
 	XMLName xml.Name `xml:"ok"`
-}
-
-type DataStp struct {
-	XMLName         xml.Name             `xml:"data"`
-	StpGlobalConfig *StpGlobalConfigData `xml:"stp-global-config,omitempty"`
 }
 
 type RPCErrorStp struct {
@@ -42,8 +36,9 @@ type RPCErrorStp struct {
 
 // --- STP Specific XML Data Structures ---
 type StpGlobalConfigData struct {
+	// XMLName made namespace-agnostic for flexible unmarshalling in edit-config.
+	// Namespace will be explicitly set when marshalling for GET response.
 	XMLName xml.Name `xml:"stp-global-config"`
-	Xmlns   string   `xml:"xmlns,attr,omitempty"`
 	Enabled *bool    `xml:"enabled,omitempty"`
 }
 
@@ -84,13 +79,13 @@ func HandleStpGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 	stpEnabled := miyagiStatusInt == 1
 
 	stpData := StpGlobalConfigData{
-		Xmlns:   StpGlobalConfigNamespace,
+		// Explicitly set XMLName with desired namespace for GET response
+		XMLName: xml.Name{Space: "yang:stp", Local: "stp-global-config"},
 		Enabled: &stpEnabled,
 	}
 
 	reply := RpcReplyStp{
-		MessageID: msgID,
-		Data:      &DataStp{StpGlobalConfig: &stpData},
+		StpGlobalConfig: &stpData, // Directly embed
 	}
 	return marshalToXMLStp(reply, frameEnd)
 }
@@ -139,7 +134,10 @@ func HandleStpEditConfig(miyagiSocketPath string, request []byte, msgID, frameEn
 		return buildErrorResponseBytesStp(msgID, "application", "operation-failed", errMsg, frameEnd)
 	}
 
-	reply := RpcReplyStp{MessageID: msgID, Ok: &OkStp{}}
+	reply := RpcReplyStp{
+		// MessageID is no longer part of RpcReplyStp
+		Ok: &OkStp{},
+	}
 	return marshalToXMLStp(reply, frameEnd)
 }
 
@@ -158,8 +156,8 @@ func buildErrorResponseBytesStp(msgID, errType, errTag, errMsg, frameEnd string)
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, ">", "&gt;")
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, "&", "&amp;")
 	reply := RpcReplyStp{
-		MessageID: msgID,
-		Errors:    []RPCErrorStp{{ErrorType: errType, ErrorTag: errTag, ErrorSeverity: "error", ErrorMessage: escapedErrMsg}},
+		// MessageID is no longer part of RpcReplyStp
+		Errors: []RPCErrorStp{{ErrorType: errType, ErrorTag: errTag, ErrorSeverity: "error", ErrorMessage: escapedErrMsg}},
 	}
 	return marshalToXMLStp(reply, frameEnd)
 }
