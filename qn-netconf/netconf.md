@@ -21,17 +21,14 @@ These examples cover common tasks such as:
 
 ## 1. Interface Configuration
 This section covers how to retrieve detailed information about all network interfaces on the device.
-The response format for this specific `<get>` operation is a custom XML structure (not standard NETCONF `<data>`) designed to present all interface details directly under a `<root>` element, with each interface name as a dynamic tag.
 
 ### Get Interface Information
 Retrieves operational status and configuration for all interfaces.
 
 ```xml
-<rpc message-id="102" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <get>
-    <filter type="subtree">
-      <interfaces xmlns="urn:example:params:xml:ns:yang:interfaces"/>
-    </filter>
+    <interfaces xmlns="yang:get_interface"/>
   </get>
 </rpc>
 ]]>]]>
@@ -46,9 +43,9 @@ Virtual Local Area Networks (VLANs) allow you to segment your network. This sect
 Retrieves a list of all configured VLANs and their names. The response format for this specific `<get>` operation is a custom XML structure, where VLAN data is directly under a `<vlans>` element.
 
 ```xml
-<rpc message-id="102" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <get>
-    <vlans xmlns="urn:example:params:xml:ns:yang:vlan"/>
+    <vlans xmlns="yang:get_vlan"/>
   </get>
 </rpc>
 ]]>]]>
@@ -59,15 +56,14 @@ Creates a new VLAN or modifies an existing one.
 
 
 ```xml
-<rpc message-id="101" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <vlans xmlns="urn:example:params:xml:ns:yang:vlan">
-        <vlan>
-          <id>100</id>
-          <name>vlan_100</name>
-        </vlan>
+      <vlans xmlns="yang:set_vlan">
+        <vlan>  
+          <id>79</id>
+          <name>vlan_79</name>
+        </vlan> 
       </vlans>
     </config>
   </edit-config>

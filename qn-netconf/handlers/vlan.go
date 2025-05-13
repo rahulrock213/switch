@@ -22,8 +22,10 @@ const NetconfBaseNamespace = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // RpcReply is the generic NETCONF rpc-reply structure.
 type RpcReply struct {
-	XMLName   xml.Name   `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
-	MessageID string     `xml:"message-id,attr"`
+	// Changed XMLName to remove the base NETCONF namespace from the marshalled output.
+	XMLName xml.Name `xml:"rpc-reply"`
+	// Removed the xml tag for MessageID to prevent it from being marshalled as an attribute.
+	MessageID string
 	Data      *Data      `xml:"data,omitempty"`
 	Ok        *Ok        `xml:"ok,omitempty"`
 	Errors    []RPCError `xml:"rpc-error,omitempty"`
@@ -42,7 +44,8 @@ type Data struct {
 
 // VlansHolder is the container for a list of VLANs in responses.
 type VlansHolder struct {
-	XMLName xml.Name    `xml:"urn:example:params:xml:ns:yang:vlan vlans"`
+	// Changed namespace in the XMLName tag to match the requested output
+	XMLName xml.Name    `xml:"yang:vlan vlans"`
 	Vlan    []VlanEntry `xml:"vlan"`
 }
 
@@ -66,13 +69,19 @@ type RPCError struct {
 
 // EditConfigPayload represents the top-level structure of an <edit-config> request's <config> part.
 type EditConfigPayload struct {
-	XMLName xml.Name    `xml:"config"`
-	Vlans   VlansConfig `xml:"urn:example:params:xml:ns:yang:vlan vlans"`
+	XMLName xml.Name `xml:"config"`
+	// Changed to be namespace-agnostic for the field matching.
+	// This allows it to unmarshal <vlans> with either "yang:set_vlan"
+	// or the original "urn:example:params:xml:ns:yang:vlan" namespace.
+	Vlans VlansConfig `xml:"vlans"`
 }
 
 // VlansConfig is the <vlans> container within an <edit-config>.
 type VlansConfig struct {
-	XMLName     xml.Name          `xml:"urn:example:params:xml:ns:yang:vlan vlans"`
+	// Changed XMLName to be namespace-agnostic.
+	// The actual namespace will be on the <vlans> tag in the XML,
+	// and the unmarshaller will associate it with this struct.
+	XMLName     xml.Name          `xml:"vlans"`
 	VlanEntries []VlanConfigEntry `xml:"vlan"`
 }
 

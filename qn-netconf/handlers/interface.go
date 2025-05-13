@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml" // Import encoding/xml
 	"fmt"
@@ -24,7 +25,7 @@ const NetconfBaseNamespaceIF = "urn:ietf:params:xml:ns:netconf:base:1.0" // Usin
 
 // RpcReplyIF is the generic NETCONF rpc-reply structure.
 type RpcReplyIF struct {
-	XMLName   xml.Name     `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
+	XMLName   xml.Name     `xml:"rpc-reply"`
 	MessageID string       `xml:"message-id,attr"`
 	Data      *DataIF      `xml:"data,omitempty"`
 	Ok        *OkIF        `xml:"ok,omitempty"`
@@ -53,9 +54,11 @@ type RPCErrorIF struct {
 
 // --- Custom XML Output Structures (as per user request) ---
 
+// XmlRoot is the root element for the custom XML output for interface details.
+// Its XMLName will define the root tag and its namespace.
 type XmlRoot struct {
-	XMLName xml.Name `xml:"root"`
-	// Interfaces are ordered based on sorted keys from the Miyagi map
+	XMLName xml.Name `xml:"rpc-reply"` // This should be the intended root tag
+	// Interfaces are still ordered and marshalled directly under the root tag
 	// and then marshalled directly under <root>
 	Interfaces []XmlInterfaceElement
 }
@@ -90,7 +93,8 @@ type XmlStatusDescription struct {
 
 // Custom marshaller for XmlRoot to handle dynamic interface tags directly under <root>
 func (r XmlRoot) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	// start will be <root>
+	log.Printf("NETCONF_IF_HANDLER: MarshalXML called for XmlRoot. Intended root tag from start.Name.Local: %s", start.Name.Local)
+	// start.Name.Local should be "rpc-reply" if XMLName tag is effective
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
@@ -101,7 +105,7 @@ func (r XmlRoot) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 			return err
 		}
 	}
-	return e.EncodeToken(xml.EndElement{Name: start.Name}) // End <root>
+	return e.EncodeToken(xml.EndElement{Name: start.Name}) // End <rpc-reply>
 }
 
 // --- Miyagi JSON Data Structures ---
@@ -132,6 +136,27 @@ type MiyagiInterfaceDetail struct {
 	Vlans         []int                        `json:"vlans"`
 	UntaggedVlan  []int                        `json:"untagged_vlan"`
 	TaggedVlan    []int                        `json:"tagged_vlan"`
+}
+
+// marshalInnerInterfaces is a helper to marshal only the list of XmlInterfaceElement
+// using the custom logic for dynamic tags.
+func marshalInnerInterfaces(interfaces []XmlInterfaceElement, prefix string, indent string) ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := xml.NewEncoder(&buf)
+	if prefix == "" && indent != "" { // Apply indent if specified
+		encoder.Indent("", indent)
+	}
+
+	for _, iface := range interfaces {
+		// Encode each interface using its dynamic name (iface.XMLName)
+		if err := encoder.EncodeElement(iface, xml.StartElement{Name: iface.XMLName}); err != nil {
+			return nil, fmt.Errorf("failed to encode interface %s: %w", iface.XMLName.Local, err)
+		}
+	}
+	if err := encoder.Flush(); err != nil {
+		return nil, fmt.Errorf("failed to flush encoder for inner interfaces: %w", err)
+	}
+	return buf.Bytes(), nil
 }
 
 // BuildGetInterfacesResponse constructs the NETCONF rpc-reply for a get-interfaces request
@@ -279,16 +304,28 @@ func BuildGetInterfacesResponse(miyagiSocketPath, msgID, frameEnd string) []byte
 		xmlInterfaces = append(xmlInterfaces, xmlEntry)
 	}
 
-	xmlRoot := XmlRoot{Interfaces: xmlInterfaces}
-
-	xmlBytes, err := xml.MarshalIndent(xmlRoot, "", "  ") // Indent with 2 spaces as per desired output
+	// --- Direct Construction of XML with <rpc-reply> root ---
+	innerXmlBytes, err := marshalInnerInterfaces(xmlInterfaces, "", "  ")
 	if err != nil {
-		log.Printf("NETCONF_IF_HANDLER: Error marshalling custom XML: %v", err)
-		return []byte("Error generating XML response") // Basic error
+		log.Printf("NETCONF_IF_HANDLER: Error marshalling inner interface XML: %v", err)
+		// Consider a more structured error if this were a standard NETCONF reply
+		return []byte(fmt.Sprintf("Error generating inner XML content: %v", err))
 	}
 
-	// Prepend XML declaration. Note: msgID and frameEnd are not used for this custom format.
-	return append([]byte(xml.Header), xmlBytes...)
+	var fullResponse bytes.Buffer
+	fullResponse.WriteString(xml.Header)
+	fullResponse.WriteString("<rpc-reply>") // Manually write the desired root tag
+	if len(innerXmlBytes) > 0 {
+		// Add a newline and initial indent if there's content, for pretty printing
+		// This assumes the innerXmlBytes are already indented.
+		// For proper nesting, the indent in marshalInnerInterfaces might need adjustment
+		// or we rely on the client to pretty-print.
+		// For simplicity, just append.
+		fullResponse.Write(innerXmlBytes)
+	}
+	fullResponse.WriteString("</rpc-reply>")
+
+	return fullResponse.Bytes()
 }
 
 // Helper to convert *int to string or "" if nil

@@ -38,7 +38,13 @@ func init() {
 		// }, // Keep this comma if you uncomment the above
 		"edit-config": func(miyagiSocketPath, frameEnd string, request []byte, msgID string) []byte {
 			// More specific dispatch for edit-config can be done here if needed
-			if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\">", handlers.VlanNamespace))) {
+			// Check for the short VLAN namespace first
+			if bytes.Contains(request, []byte("<vlans xmlns=\"yang:set_vlan\">")) {
+				log.Printf("NETCONF_SERVER: Dispatching to HandleEditConfig for VLANs with custom 'yang:set_vlan' namespace. Message ID: %s", msgID)
+				return handlers.HandleEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\">", handlers.VlanNamespace))) {
+				// Fallback to original namespace for compatibility / other tools
+				log.Printf("NETCONF_SERVER: Dispatching to HandleEditConfig for VLANs with original namespace. Message ID: %s", msgID)
 				return handlers.HandleEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\">", handlers.SshConfigNamespace))) {
 				return handlers.HandleSSHEditConfig(miyagiSocketPath, request, msgID, frameEnd)
@@ -254,9 +260,20 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
 		return fmt.Errorf("failed to send server hello: %w", err)
 	}
 
+	// Read what is presumably the client's hello message.
+	// For manual testing, if the client sends an RPC directly, we'll try to process it.
 	clientHello, err := readFrame(channel)
 	if err != nil {
 		return fmt.Errorf("error reading client hello: %w", err)
+	}
+	// If the first frame from client looks like an RPC, try to process it immediately.
+	// A proper client hello would also be an XML document, but we are being lenient here.
+	if bytes.HasPrefix(clientHello, []byte("<rpc")) {
+		log.Printf("NETCONF_SERVER: Session %s: First client frame looks like RPC, attempting to process:\n%s", sessionID, clientHello)
+		response := generateResponse(clientHello)
+		if _, err := channel.Write(response); err != nil {
+			return fmt.Errorf("failed to send response to initial client RPC: %w", err)
+		}
 	}
 	log.Printf("NETCONF_SERVER: Session %s: Client hello received:\n%s", sessionID, clientHello)
 
@@ -285,27 +302,41 @@ func generateSessionID() string {
 func generateResponse(request []byte) []byte {
 	msgID := extractMessageID(request)
 
-	// Find the start of the <rpc> tag, skipping any XML declaration
-	rpcQuery := request // Assume request starts with <rpc> by default
-	if xmlDeclEnd := bytes.Index(request, []byte("?>")); xmlDeclEnd != -1 {
-		// Check if there's content after "?>"
-		if xmlDeclEnd+2 < len(request) {
-			potentialRpcStart := bytes.TrimSpace(request[xmlDeclEnd+2:]) // Trim leading whitespace after XML decl
-			if bytes.HasPrefix(potentialRpcStart, []byte("<rpc")) {
-				rpcQuery = potentialRpcStart
-			}
-		}
+	// Attempt to find the actual start of the <rpc> tag within the received frame
+	// This will help ignore any leading garbage text like "asdasd"
+	rpcStartIndex := bytes.Index(request, []byte("<rpc"))
+	var rpcQuery []byte
+	if rpcStartIndex != -1 {
+		// If <rpc is found, consider the message from that point
+		rpcQuery = request[rpcStartIndex:]
+	} else {
+		// No <rpc> tag found at all in the frame, definitely malformed
+		log.Printf("NETCONF_SERVER: Malformed request, no <rpc> tag found in frame: %s", string(request))
+		return buildErrorResponse(appConfig.FrameEnd, msgID, "malformed-message", "Request frame does not contain an <rpc> tag.")
 	}
 
 	// Check for standard <get> operation
 	if bytes.HasPrefix(rpcQuery, []byte("<rpc")) && bytes.Contains(rpcQuery, []byte("<get>")) && bytes.Contains(rpcQuery, []byte("</get>")) {
 		// It's a <get> operation. Check for specific filters.
-		if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\"", handlers.VlanNamespace))) {
-			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get> with VLAN filter. Message ID: %s", msgID)
+
+		// VLAN checks
+		if bytes.Contains(request, []byte("<vlans")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:vlan\"")) || bytes.Contains(request, []byte("xmlns='yang:vlan'"))) { // User requested "yang:vlan" for get
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get> with custom 'yang:vlan' namespace. Message ID: %s", msgID)
 			return handlers.BuildGetVlansResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\"", handlers.VlanNamespace))) {
+			// Fallback for original namespace / other tools
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get> with original VLAN filter. Message ID: %s", msgID)
+			return handlers.BuildGetVlansResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Interface checks
+		} else if bytes.Contains(request, []byte("<interfaces")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_interface\"")) || bytes.Contains(request, []byte("xmlns='yang:get_interface'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get> with custom 'yang:get_interface' namespace. Message ID: %s", msgID)
+			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<interfaces xmlns=\"%s\"", handlers.InterfaceNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get> with Interface filter. Message ID: %s", msgID)
 			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// SSH check
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\"", handlers.SshConfigNamespace))) {
 			// Simplified check: if the ssh-server-config tag with the correct namespace is present.
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get> with SSH filter. Message ID: %s", msgID)
@@ -313,6 +344,7 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get> with Telnet filter. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Note: No <get> handlers for routing, ip-interface, port-config, stp-global currently defined in this block
 			// } else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
 			// 	log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get> with Routing filter. Message ID: %s", msgID)
 			// 	return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd) // Placeholder if GET is implemented
@@ -324,26 +356,41 @@ func generateResponse(request []byte) []byte {
 
 	} else if bytes.HasPrefix(rpcQuery, []byte("<rpc")) && bytes.Contains(rpcQuery, []byte("<get-config>")) && bytes.Contains(rpcQuery, []byte("</get-config>")) {
 		// It's a <get-config> operation. Check for specific filters.
-		if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\"", handlers.VlanNamespace))) {
-			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get-config> with VLAN filter. Message ID: %s", msgID)
+
+		// VLAN checks
+		if bytes.Contains(request, []byte("<vlans")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:vlan\"")) || bytes.Contains(request, []byte("xmlns='yang:vlan'"))) { // User requested "yang:vlan" for get
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get-config> with custom 'yang:vlan' namespace. Message ID: %s", msgID)
 			return handlers.BuildGetVlansResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<vlans xmlns=\"%s\"", handlers.VlanNamespace))) {
+			// Fallback for original namespace / other tools
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetVlansResponse for <get-config> with original VLAN filter. Message ID: %s", msgID)
+			return handlers.BuildGetVlansResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Interface checks
+		} else if bytes.Contains(request, []byte("<interfaces")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_interface\"")) || bytes.Contains(request, []byte("xmlns='yang:get_interface'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get-config> with custom 'yang:get_interface' namespace. Message ID: %s", msgID)
+			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<interfaces xmlns=\"%s\"", handlers.InterfaceNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get-config> with Interface filter. Message ID: %s", msgID)
 			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// SSH check
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\"", handlers.SshConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get-config> with SSH filter. Message ID: %s", msgID)
 			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Telnet check
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get-config> with Telnet filter. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// IP Interface check
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ip-interfaces xmlns=\"%s\"", handlers.IpInterfaceNamespace))) {
-			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get> with IP Interface filter. Message ID: %s", msgID)
+			log.Printf("NETCONF_SERVER: Dispatching to HandleIpInterfaceGetConfig for <get-config> with IP Interface filter. Message ID: %s", msgID)
 			return handlers.HandleIpInterfaceGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<port-configurations xmlns=\"%s\"", handlers.PortConfigNamespace))) {
-			log.Printf("NETCONF_SERVER: Dispatching to HandlePortConfigurationGetConfig for <get> with Port Configuration filter. Message ID: %s", msgID)
+			log.Printf("NETCONF_SERVER: Dispatching to HandlePortConfigurationGetConfig for <get-config> with Port Configuration filter. Message ID: %s", msgID)
 			return handlers.HandlePortConfigurationGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<stp-global-config xmlns=\"%s\"", handlers.StpGlobalConfigNamespace))) {
-			log.Printf("NETCONF_SERVER: Dispatching to HandleStpGetConfig for <get> with STP Global filter. Message ID: %s", msgID)
+			log.Printf("NETCONF_SERVER: Dispatching to HandleStpGetConfig for <get-config> with STP Global filter. Message ID: %s", msgID)
 			return handlers.HandleStpGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 			// } else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
 			// 	log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with Routing filter. Message ID: %s", msgID)
