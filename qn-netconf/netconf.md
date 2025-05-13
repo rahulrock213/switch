@@ -148,11 +148,10 @@ Turns on the Telnet server.
 
 
 ```xml
-<rpc message-id="131" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc >
   <edit-config>
-    <target><running/></target>
     <config>
-      <telnet-server-config xmlns="urn:example:params:xml:ns:yang:telnet-server-config">
+      <telnet-server-config xmlns="yang:set_telnet">
         <enabled>true</enabled>
       </telnet-server-config>
     </config>
@@ -166,11 +165,10 @@ Turns off the Telnet server.
 
 
 ```xml
-<rpc message-id="132" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc >
   <edit-config>
-    <target><running/></target>
     <config>
-      <telnet-server-config xmlns="urn:example:params:xml:ns:yang:telnet-server-config">
+      <telnet-server-config xmlns="yang:set_telnet">
         <enabled>false</enabled>
       </telnet-server-config>
     </config>
@@ -190,16 +188,15 @@ Adds a new static IP route to the device's routing table. The `operation="create
 
 
 ```xml
-<rpc message-id="140" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <routing xmlns="urn:example:params:xml:ns:yang:routing">
+      <routing xmlns="yang:set_route">
         <static-routes>
           <route operation="create">
-            <prefix>192.168.100.15</prefix>
+            <prefix>131.108.1.27</prefix>
             <mask>255.255.255.255</mask>
-            <next-hop>192.168.100.1</next-hop>
+            <next-hop>131.108.1.28</next-hop>
           </route>
         </static-routes>
       </routing>
@@ -214,14 +211,13 @@ Removes an existing static IP route. The `operation="delete"` attribute specifie
 
 
 ```xml
-<rpc message-id="141" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <edit-config>
-    <target><running/></target>
     <config>
-      <routing xmlns="urn:example:params:xml:ns:yang:routing">
+      <routing xmlns="yang:set_route">
         <static-routes>
           <route operation="delete">
-            <prefix>192.168.100.1</prefix>
+            <prefix>131.108.1.27</prefix>
             <mask>255.255.255.255</mask>
           </route>
         </static-routes>

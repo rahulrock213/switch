@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"log"
@@ -16,21 +17,15 @@ const NetconfBaseNamespaceRoute = "urn:ietf:params:xml:ns:netconf:base:1.0"
 // --- Common NETCONF XML Data Structures (for Route handler) ---
 
 type RpcReplyRoute struct {
-	XMLName   xml.Name        `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
-	MessageID string          `xml:"message-id,attr"`
-	Ok        *OkRoute        `xml:"ok,omitempty"`
-	Errors    []RPCErrorRoute `xml:"rpc-error,omitempty"`
-	// Data      *DataRoute    `xml:"data,omitempty"` // Not used for edit-config, but would be for get-config
+	XMLName       xml.Name                `xml:"rpc-reply"`
+	RoutingConfig *RoutingDataGetResponse `xml:"routing,omitempty"` // For GET response
+	Ok            *OkRoute                `xml:"ok,omitempty"`      // For edit-config response
+	Errors        []RPCErrorRoute         `xml:"rpc-error,omitempty"`
 }
 
 type OkRoute struct {
 	XMLName xml.Name `xml:"ok"`
 }
-
-// type DataRoute struct { // Example if we were to implement get-config for routes
-// 	XMLName     xml.Name     `xml:"data"`
-// 	RoutingData *RoutingData `xml:"routing,omitempty"`
-// }
 
 type RPCErrorRoute struct {
 	XMLName       xml.Name `xml:"rpc-error"`
@@ -45,12 +40,14 @@ type RPCErrorRoute struct {
 // EditConfigRoutingPayload is the top-level structure for <config>
 type EditConfigRoutingPayload struct {
 	XMLName     xml.Name     `xml:"config"`
-	RoutingData *RoutingData `xml:"routing"`
+	RoutingData *RoutingData `xml:"routing"` // Matches <routing> by local name
 }
 
 // RoutingData corresponds to the <routing> container
 type RoutingData struct {
-	XMLName      xml.Name          `xml:"routing"`
+	// XMLName made namespace-agnostic for flexible unmarshalling in edit-config.
+	// Namespace will be explicitly set when marshalling for GET response.
+	XMLName      xml.Name          `xml:"routing"` // For edit-config unmarshalling
 	Xmlns        string            `xml:"xmlns,attr,omitempty"`
 	StaticRoutes *StaticRoutesData `xml:"static-routes"`
 }
@@ -63,11 +60,33 @@ type StaticRoutesData struct {
 
 // RouteData corresponds to a single <route> entry
 type RouteData struct {
-	XMLName   xml.Name `xml:"route"`
+	XMLName   xml.Name `xml:"route"`                    // For edit-config
 	Operation string   `xml:"operation,attr,omitempty"` // For 'create', 'delete', 'merge', etc.
 	Prefix    string   `xml:"prefix"`
 	Mask      string   `xml:"mask"`
 	NextHop   string   `xml:"next-hop,omitempty"` // Optional for delete
+}
+
+// --- Structures for GET response ---
+
+// RoutingDataGetResponse is for the <routing> container in a GET response.
+type RoutingDataGetResponse struct {
+	XMLName      xml.Name                     `xml:"yang:route routing"` // Namespace for GET response
+	StaticRoutes *StaticRoutesDataGetResponse `xml:"static-routes"`
+}
+
+// StaticRoutesDataGetResponse corresponds to <static-routes> in a GET response.
+type StaticRoutesDataGetResponse struct {
+	XMLName xml.Name               `xml:"static-routes"`
+	Routes  []RouteDataGetResponse `xml:"route"`
+}
+
+// RouteDataGetResponse corresponds to a single <route> in a GET response.
+type RouteDataGetResponse struct {
+	XMLName xml.Name `xml:"route"` // No operation attribute for GET
+	Prefix  string   `xml:"prefix"`
+	Mask    string   `xml:"mask"`
+	NextHop string   `xml:"next-hop"`
 }
 
 // --- Handler Function ---
@@ -150,7 +169,10 @@ func HandleRouteEditConfig(miyagiSocketPath string, request []byte, msgID, frame
 		// For simplicity, we stop at first error.
 	}
 
-	reply := RpcReplyRoute{MessageID: msgID, Ok: &OkRoute{}}
+	reply := RpcReplyRoute{
+		// MessageID is no longer part of RpcReplyRoute
+		Ok: &OkRoute{},
+	}
 	return marshalToXMLRoute(reply, frameEnd)
 }
 
@@ -174,7 +196,7 @@ func buildErrorResponseBytesRoute(msgID, errType, errTag, errMsg, frameEnd strin
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, "&", "&amp;")
 
 	reply := RpcReplyRoute{
-		MessageID: msgID,
+		// MessageID is no longer part of RpcReplyRoute
 		Errors: []RPCErrorRoute{
 			{
 				ErrorType:     errType,
@@ -184,5 +206,61 @@ func buildErrorResponseBytesRoute(msgID, errType, errTag, errMsg, frameEnd strin
 			},
 		},
 	}
+	return marshalToXMLRoute(reply, frameEnd)
+}
+
+// HandleRouteGetConfig handles <get> or <get-config> for static routes
+func HandleRouteGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
+	miyagiReq := miyagi.MiyagiRequest{
+		Method: "call",
+		Params: map[string]interface{}{
+			"uid": "Agent.Switch.Get.IPRouting.Table", // Assumed Miyagi UID
+			"arg": nil,
+		},
+		ID: 9, // Static ID for this Miyagi request
+	}
+
+	miyagiResp, err := miyagi.SendRequest(miyagiSocketPath, miyagiReq)
+	if err != nil {
+		log.Printf("NETCONF_ROUTE_HANDLER: Error calling Miyagi for Get.IPRouting.Table: %v", err)
+		return buildErrorResponseBytesRoute(msgID, "application", "operation-failed", "Error communicating with device agent for routes", frameEnd)
+	}
+
+	if miyagiResp.Error != nil {
+		errMsg := fmt.Sprintf("Device error retrieving routes: %s (code: %d)", miyagiResp.Error.Message, miyagiResp.Error.Code)
+		log.Printf("NETCONF_ROUTE_HANDLER: Miyagi returned error for Get.IPRouting.Table: %s", errMsg)
+		return buildErrorResponseBytesRoute(msgID, "application", "operation-failed", errMsg, frameEnd)
+	}
+
+	// Assuming Miyagi returns a JSON array of route objects
+	var miyagiRoutes []RouteDataGetResponse // Use the GET response struct directly
+	if err := json.Unmarshal(miyagiResp.Result, &miyagiRoutes); err != nil {
+		log.Printf("NETCONF_ROUTE_HANDLER: Error unmarshalling Miyagi route table: %v. Raw: %s", err, string(miyagiResp.Result))
+		return buildErrorResponseBytesRoute(msgID, "application", "operation-failed", "Failed to parse route data from device", frameEnd)
+	}
+
+	// Prepare the data for XML marshalling
+	var routesForXML []RouteDataGetResponse
+	for _, r := range miyagiRoutes {
+		routesForXML = append(routesForXML, RouteDataGetResponse{
+			// XMLName will be set by the struct tag "route"
+			Prefix:  r.Prefix,
+			Mask:    r.Mask,
+			NextHop: r.NextHop,
+		})
+	}
+
+	routingConfig := RoutingDataGetResponse{
+		// XMLName includes "yang:route routing"
+		StaticRoutes: &StaticRoutesDataGetResponse{
+			Routes: routesForXML,
+		},
+	}
+
+	reply := RpcReplyRoute{
+		// MessageID is no longer part of RpcReplyRoute
+		RoutingConfig: &routingConfig,
+	}
+
 	return marshalToXMLRoute(reply, frameEnd)
 }
