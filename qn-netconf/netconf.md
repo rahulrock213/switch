@@ -82,11 +82,9 @@ Checks if the SSH server is currently enabled or disabled.
 
 
 ```xml
-<rpc message-id="120" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+<rpc>
   <get>
-    <filter type="subtree">
-      <ssh-server-config xmlns="urn:example:params:xml:ns:yang:ssh-server-config"/>
-    </filter>
+    <ssh-server-config xmlns="yang:get_ssh"/>
   </get>
 </rpc>
 ]]>]]>

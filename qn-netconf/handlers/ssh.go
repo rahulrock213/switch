@@ -17,20 +17,13 @@ const NetconfBaseNamespaceSSH = "urn:ietf:params:xml:ns:netconf:base:1.0"
 // --- Common NETCONF XML Data Structures (for SSH handler) ---
 
 type RpcReplySSH struct {
-	XMLName   xml.Name      `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 rpc-reply"`
-	MessageID string        `xml:"message-id,attr"`
-	Data      *DataSSH      `xml:"data,omitempty"`
-	Ok        *OkSSH        `xml:"ok,omitempty"`
-	Errors    []RPCErrorSSH `xml:"rpc-error,omitempty"`
-}
-
-type OkSSH struct {
-	XMLName xml.Name `xml:"ok"`
-}
-
-type DataSSH struct {
-	XMLName   xml.Name             `xml:"data"`
-	SshConfig *SshServerConfigData `xml:"ssh-server-config,omitempty"` // Changed to use the specific struct type
+	// Changed XMLName to remove the base NETCONF namespace from the marshalled output.
+	XMLName xml.Name `xml:"rpc-reply"`
+	// MessageID field removed to prevent its output.
+	// Data wrapper removed; SshConfig will be directly under rpc-reply.
+	SshConfig *SshServerConfigData `xml:"ssh-server-config,omitempty"`
+	Ok        *OkSSH               `xml:"ok,omitempty"`
+	Errors    []RPCErrorSSH        `xml:"rpc-error,omitempty"`
 }
 
 type RPCErrorSSH struct {
@@ -41,12 +34,18 @@ type RPCErrorSSH struct {
 	ErrorMessage  string   `xml:"error-message"`
 }
 
+// OkSSH represents the <ok/> element.
+type OkSSH struct {
+	XMLName xml.Name `xml:"ok"`
+}
+
 // --- SSH Specific XML Data Structures ---
 
 // SshServerConfigData is used for <ssh-server-config> in <data> or <config>
 type SshServerConfigData struct {
+	// Make XMLName namespace-agnostic here to allow unmarshalling from requests
+	// that use a different namespace on the <ssh-server-config> tag (like "yang:set_ssh").
 	XMLName xml.Name `xml:"ssh-server-config"`
-	Xmlns   string   `xml:"xmlns,attr,omitempty"`
 	Enabled *bool    `xml:"enabled,omitempty"` // Use pointer to distinguish not present vs. explicit false
 }
 
@@ -92,16 +91,14 @@ func HandleSSHGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 
 	// Create the actual data structure to be marshalled
 	sshConfigPayload := SshServerConfigData{
-		// XMLName is defined in the SshServerConfigData struct type itself
-		Xmlns:   SshConfigNamespace,
+		// For the GET response, explicitly set the desired XMLName with namespace
+		XMLName: xml.Name{Space: "yang:ssh", Local: "ssh-server-config"},
 		Enabled: &sshEnabled,
 	}
 
 	reply := RpcReplySSH{
-		MessageID: msgID,
-		Data: &DataSSH{
-			SshConfig: &sshConfigPayload, // Assign the struct directly
-		},
+		// MessageID is no longer part of RpcReplySSH for this simplified response
+		SshConfig: &sshConfigPayload,
 	}
 	return marshalToXMLSSH(reply, frameEnd)
 }
@@ -120,6 +117,7 @@ func HandleSSHEditConfig(miyagiSocketPath string, request []byte, msgID, frameEn
 	}
 	configPayload := request[configStartIndex : configEndIndex+len("</config>")]
 
+	log.Printf("NETCONF_SSH_HANDLER: DEBUG: Attempting to unmarshal configPayload: %s", string(configPayload))
 	if err := xml.Unmarshal(configPayload, &editReq); err != nil {
 		log.Printf("NETCONF_SSH_HANDLER: Error unmarshalling SSH <edit-config> payload: %v. Payload: %s", err, string(configPayload))
 		return buildErrorResponseBytesSSH(msgID, "protocol", "malformed-message", "Invalid SSH configuration format", frameEnd)
@@ -156,7 +154,10 @@ func HandleSSHEditConfig(miyagiSocketPath string, request []byte, msgID, frameEn
 	}
 
 	// If Miyagi call is successful
-	reply := RpcReplySSH{MessageID: msgID, Ok: &OkSSH{}}
+	reply := RpcReplySSH{
+		// MessageID is no longer part of RpcReplySSH
+		Ok: &OkSSH{},
+	}
 	return marshalToXMLSSH(reply, frameEnd)
 }
 
@@ -182,7 +183,6 @@ func buildErrorResponseBytesSSH(msgID, errType, errTag, errMsg, frameEnd string)
 	escapedErrMsg = strings.ReplaceAll(escapedErrMsg, "&", "&amp;")
 
 	reply := RpcReplySSH{
-		MessageID: msgID,
 		Errors: []RPCErrorSSH{
 			{
 				ErrorType:     errType,

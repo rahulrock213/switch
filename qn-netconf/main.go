@@ -46,7 +46,22 @@ func init() {
 				// Fallback to original namespace for compatibility / other tools
 				log.Printf("NETCONF_SERVER: Dispatching to HandleEditConfig for VLANs with original namespace. Message ID: %s", msgID)
 				return handlers.HandleEditConfig(miyagiSocketPath, request, msgID, frameEnd)
+			}
+			// SSH checks
+			sshCheckString := "<ssh-server-config xmlns=\"yang:set_ssh\">"
+			containsSshShort := bytes.Contains(request, []byte(sshCheckString))
+			// Safely log a snippet of the request
+			requestSnippetForLog := string(request)
+			if len(requestSnippetForLog) > 512 {
+				requestSnippetForLog = requestSnippetForLog[:512] + "..."
+			}
+			// Log the request being checked and the result of bytes.Contains
+			log.Printf("NETCONF_SERVER: DEBUG: In edit-config handler. Checking for substring '%s'. Found: %t. Full request snippet: %s", sshCheckString, containsSshShort, requestSnippetForLog)
+			if containsSshShort {
+				log.Printf("NETCONF_SERVER: Dispatching to HandleSSHEditConfig with custom 'yang:set_ssh' namespace. Message ID: %s", msgID)
+				return handlers.HandleSSHEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\">", handlers.SshConfigNamespace))) {
+				log.Printf("NETCONF_SERVER: Dispatching to HandleSSHEditConfig with original namespace. Message ID: %s", msgID)
 				return handlers.HandleSSHEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\">", handlers.TelnetConfigNamespace))) {
 				return handlers.HandleTelnetEditConfig(miyagiSocketPath, request, msgID, frameEnd)
@@ -336,9 +351,12 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<interfaces xmlns=\"%s\"", handlers.InterfaceNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get> with Interface filter. Message ID: %s", msgID)
 			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-			// SSH check
+			// SSH checks
+		} else if bytes.Contains(request, []byte("<ssh-server-config")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_ssh\"")) || bytes.Contains(request, []byte("xmlns='yang:get_ssh'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get> with custom 'yang:get_ssh' namespace. Message ID: %s", msgID)
+			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\"", handlers.SshConfigNamespace))) {
-			// Simplified check: if the ssh-server-config tag with the correct namespace is present.
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get> with SSH filter. Message ID: %s", msgID)
 			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
@@ -374,7 +392,11 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<interfaces xmlns=\"%s\"", handlers.InterfaceNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to BuildGetInterfacesResponse for <get-config> with Interface filter. Message ID: %s", msgID)
 			return handlers.BuildGetInterfacesResponse(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-			// SSH check
+			// SSH checks
+		} else if bytes.Contains(request, []byte("<ssh-server-config")) &&
+			(bytes.Contains(request, []byte("xmlns=\"yang:get_ssh\"")) || bytes.Contains(request, []byte("xmlns='yang:get_ssh'"))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get-config> with custom 'yang:get_ssh' namespace. Message ID: %s", msgID)
+			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh-server-config xmlns=\"%s\"", handlers.SshConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get-config> with SSH filter. Message ID: %s", msgID)
 			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
