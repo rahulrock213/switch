@@ -24,16 +24,10 @@ const NetconfBaseNamespace = "yang:vlan"
 // RpcReply is the generic NETCONF rpc-reply structure.
 type RpcReply struct {
 	// XMLName specifies the namespace and local name for <rpc-reply>, aligning with NETCONF base.
-	XMLName xml.Name   `xml:"yang:vlan rpc-reply"`
-	Data    *Data      `xml:"data,omitempty"`
-	Result  string     `xml:"result,omitempty"` // Changed from Ok to Result
-	Errors  []RPCError `xml:"rpc-error,omitempty"`
-}
-
-// Data wraps the actual data payload.
-type Data struct {
-	XMLName   xml.Name    `xml:"data"`
-	VlansData interface{} `xml:",innerxml"` // Use innerxml to embed pre-formatted or dynamic XML
+	XMLName xml.Name     `xml:"yang:vlan rpc-reply"`
+	Vlans   *VlansHolder `xml:"vlans,omitempty"` // VlansHolder will be directly under rpc-reply
+	Result  string       `xml:"result,omitempty"`
+	Errors  []RPCError   `xml:"rpc-error,omitempty"`
 }
 
 // VlansHolder is the container for a list of VLANs in responses.
@@ -161,17 +155,10 @@ func BuildGetVlansResponse(miyagiSocketPath, msgID, frameEnd string) []byte {
 	})
 
 	vlansData := VlansHolder{Vlan: vlanEntries}
-	// Marshal VlansHolder to XML bytes first
-	vlansXMLBytes, err := xml.MarshalIndent(vlansData, "    ", "  ") // Indent within <data>
-	if err != nil {
-		log.Printf("NETCONF_VLAN_HANDLER: Error marshalling VlansHolder (msgID: %s): %v", msgID, err)
-		return buildErrorResponseBytes("operation-failed", "Failed to format VLAN data for XML response", frameEnd)
-	}
 
 	reply := RpcReply{
-		Data: &Data{
-			VlansData: vlansXMLBytes, // Embed the marshalled <vlans>...</vlans>
-		},
+		// Directly embed the VlansHolder. Its XMLName will be used.
+		Vlans: &vlansData,
 	}
 	return marshalToXML(reply, frameEnd)
 }
@@ -185,53 +172,55 @@ func HandleEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd s
 	}
 	log.Printf("NETCONF_VLAN_HANDLER: HandleEditConfig called for msgID %s. Request snippet: %s", msgID, requestSnippet)
 
-	// The request is the full NETCONF message, e.g. <rpc><edit-config>...</edit-config></rpc>
-	// We need to extract the <config> part to unmarshal into EditConfigPayload.
-	// The original parseVlanConfig looked for <config><vlans xmlns="...">
+	// Modified to parse <vlans> directly from <edit-config>, bypassing the <config> wrapper.
+	// Client should send <edit-config><vlans>...</vlans></edit-config>
 
-	configTagStart := []byte("<config>")
-	configTagEnd := []byte("</config>")
+	// A more robust way to find the start of <vlans> tag, accommodating attributes.
+	vlansTagStartBytes := []byte("<vlans")
+	vlansTagEndBytes := []byte("</vlans>")
 
-	configStartIdx := bytes.Index(request, configTagStart) //
-	if configStartIdx == -1 {                              //
-		log.Printf("NETCONF_VLAN_HANDLER: <config> tag not found in request for msgID %s.", msgID)
-		return buildErrorResponseBytes("malformed-message", "Missing <config> element in edit-config", frameEnd)
+	vlansStartIdx := bytes.Index(request, vlansTagStartBytes)
+	if vlansStartIdx == -1 {
+		log.Printf("NETCONF_VLAN_HANDLER: <vlans> tag not found in request for msgID %s.", msgID)
+		return buildErrorResponseBytes("malformed-message", "Missing <vlans> element in edit-config", frameEnd)
 	}
 
-	configEndIdx := bytes.Index(request[configStartIdx:], configTagEnd)
-	if configEndIdx == -1 {
-		log.Printf("NETCONF_VLAN_HANDLER: Closing </config> tag not found for msgID %s.", msgID)
-		return buildErrorResponseBytes("malformed-message", "Malformed <config> element in edit-config", frameEnd)
+	// Find the closing tag for <vlans> starting from after the opening tag is found.
+	vlansEndIdx := bytes.Index(request[vlansStartIdx:], vlansTagEndBytes)
+	if vlansEndIdx == -1 {
+		log.Printf("NETCONF_VLAN_HANDLER: Closing </vlans> tag not found for msgID %s.", msgID)
+		return buildErrorResponseBytes("malformed-message", "Malformed <vlans> element in edit-config", frameEnd)
 	}
+	// Adjust vlansEndIdx to be relative to the original request byte slice
+	vlansEndIdx += vlansStartIdx
 
-	configContent := request[configStartIdx : configStartIdx+configEndIdx+len(configTagEnd)]
-	//
-	var payload EditConfigPayload
-	err := xml.Unmarshal(configContent, &payload)
+	vlansContent := request[vlansStartIdx : vlansEndIdx+len(vlansTagEndBytes)]
+
+	var vlansData VlansConfig // Unmarshal directly into VlansConfig
+	err := xml.Unmarshal(vlansContent, &vlansData)
 	if err != nil {
-		log.Printf("NETCONF_VLAN_HANDLER: Failed to unmarshal <config> XML for msgID %s: %v. Content: %s", msgID, err, string(configContent))
+		log.Printf("NETCONF_VLAN_HANDLER: Failed to unmarshal <vlans> XML for msgID %s: %v. Content: %s", msgID, err, string(vlansContent))
 		return buildErrorResponseBytes("invalid-value", fmt.Sprintf("Malformed VLAN configuration in edit-config: %v", err), frameEnd)
 	}
-
-	if payload.Vlans.XMLName.Local == "" { // Check if Vlans was parsed
-		log.Printf("NETCONF_VLAN_HANDLER: <vlans> section not found or not parsed in <config> for msgID %s.", msgID)
+	if vlansData.XMLName.Local == "" { // Check if VlansConfig was properly unmarshalled
+		log.Printf("NETCONF_VLAN_HANDLER: <vlans> section not found or not parsed in request for msgID %s.", msgID)
 		return buildErrorResponseBytes("invalid-value", "Missing or malformed <vlans> section in configuration", frameEnd)
 	}
 
-	log.Printf("NETCONF_VLAN_HANDLER: XML unmarshal successful for msgID %s. Parsed %d VLAN entries.", msgID, len(payload.Vlans.VlanEntries))
+	log.Printf("NETCONF_VLAN_HANDLER: XML unmarshal successful for msgID %s. Parsed %d VLAN entries.", msgID, len(vlansData.VlanEntries))
 
-	if len(payload.Vlans.VlanEntries) == 0 {
+	if len(vlansData.VlanEntries) == 0 {
 		log.Printf("NETCONF_VLAN_HANDLER: No VLAN entries found in the parsed config for msgID %s.", msgID)
 	}
 
 	// Simplified: treats entries as "create or update". A full implementation
 	// would check nc:operation attributes (merge, create, replace, delete).
-	for _, vlanEntry := range payload.Vlans.VlanEntries {
+	for _, vlanEntry := range vlansData.VlanEntries {
 		log.Printf("NETCONF_VLAN_HANDLER: Processing edit-config for VLAN ID %d, Name: %s, Operation: %s", vlanEntry.ID, vlanEntry.Name, vlanEntry.Operation)
 
 		if vlanEntry.ID == 0 { // Basic validation
 			log.Printf("NETCONF_VLAN_HANDLER: Invalid VLAN ID '0' in edit-config for msgID %s", msgID)
-			return buildErrorResponseBytes("invalid-value", "VLAN ID '0' is not allowed", frameEnd)
+			return buildErrorResponseBytes("invalid-value", "VLAN ID '0' is not allowed", frameEnd) //
 		}
 
 		miyagiReq := miyagi.MiyagiRequest{

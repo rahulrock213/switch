@@ -52,7 +52,8 @@ The response for GET operations will be an `<rpc-reply>` with a `<data>` wrapper
 The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 ### Get VLANs
 Retrieves a list of all configured VLANs and their names. The response format for this specific `<get>` operation is a custom XML structure, where VLAN data is directly under a `<vlans>` element.
-
+ 
+#### Request
 ```xml
 <rpc>
   <get>
@@ -62,26 +63,53 @@ Retrieves a list of all configured VLANs and their names. The response format fo
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply xmlns="yang:vlan">
+  <vlans xmlns="yang:get_vlan">
+    <vlan>
+      <id>1</id>
+      <name>Default</name>
+    </vlan>
+    <vlan>
+      <id>2</id>
+      <name>Account</name>
+    </vlan>
+    <vlan>
+      <id>3</id>
+      <name>HR</name>
+    </vlan>
+  </vlans>
+</rpc-reply>
+]]>]]>
+```
+
 ### Set VLAN
 Creates a new VLAN or modifies an existing one.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
-    <config>
       <vlans xmlns="yang:set_vlan">
         <vlan>  
-          <id>79</id>
-          <name>vlan_79</name>
+          <id>100</id>
+          <name>vlan_100</name>
         </vlan> 
       </vlans>
-    </config>
   </edit-config>
 </rpc>
 ]]>]]>
 ```
-
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply xmlns="yang:vlan">
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
 ---
 
 ## 3. SSH Server Configuration
