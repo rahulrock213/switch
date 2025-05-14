@@ -289,21 +289,11 @@ Static routes manually define paths for IP traffic.
 The response for GET operations will be an `<rpc-reply>` with the `<routing>` data directly under it, using `xmlns="yang:route"`.
 The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 
-### Get All Static Routes
-Retrieves all configured static IP routes.
-
-```xml
-<rpc>
-  <get>
-    <routing xmlns="yang:get_route"/>
-  </get>
-</rpc>
-]]>]]>
-```
 
 ### Add Static Route
 Adds a new static IP route to the device's routing table. The `operation="create"` attribute indicates that a new route entry should be created.
 
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -323,10 +313,19 @@ Adds a new static IP route to the device's routing table. The `operation="create
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ### Delete Static Route
 Removes an existing static IP route. The `operation="delete"` attribute specifies that the matching route entry should be removed.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -342,6 +341,15 @@ Removes an existing static IP route. The `operation="delete"` attribute specifie
     </config>
   </edit-config>
 </rpc>
+]]>]]>
+```
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
 ]]>]]>
 ```
 

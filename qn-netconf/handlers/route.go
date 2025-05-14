@@ -17,14 +17,9 @@ const NetconfBaseNamespaceRoute = "urn:ietf:params:xml:ns:netconf:base:1.0"
 // --- Common NETCONF XML Data Structures (for Route handler) ---
 
 type RpcReplyRoute struct {
-	XMLName xml.Name `xml:"rpc-reply"`
-	// RoutingConfig *RoutingDataGetResponse `xml:"routing,omitempty"` // Removed: For GET response
-	Ok     *OkRoute        `xml:"ok,omitempty"` // For edit-config response
-	Errors []RPCErrorRoute `xml:"rpc-error,omitempty"`
-}
-
-type OkRoute struct {
-	XMLName xml.Name `xml:"ok"`
+	XMLName xml.Name        `xml:"rpc-reply"`
+	Result  string          `xml:"result,omitempty"` // For edit-config response
+	Errors  []RPCErrorRoute `xml:"rpc-error,omitempty"`
 }
 
 type RPCErrorRoute struct {
@@ -171,7 +166,7 @@ func HandleRouteEditConfig(miyagiSocketPath string, request []byte, msgID, frame
 
 	reply := RpcReplyRoute{
 		// MessageID is no longer part of RpcReplyRoute
-		Ok: &OkRoute{},
+		Result: "ok",
 	}
 	return marshalToXMLRoute(reply, frameEnd)
 }
@@ -187,7 +182,7 @@ func marshalToXMLRoute(data interface{}, frameEnd string) []byte {
 			NetconfBaseNamespaceRoute, frameEnd,
 		))
 	}
-	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+	return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 }
 
 func buildErrorResponseBytesRoute(msgID, errType, errTag, errMsg, frameEnd string) []byte {
