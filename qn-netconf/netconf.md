@@ -1,26 +1,36 @@
-# NETCONF Usage Guide for Interface, VLAN, SSH, Telnet, Routing, IP Interface, Ports, and STP
+# NETCONF Usage Guide 
+
+## APIs
+- Interface
+- VLAN
+- SSH/Telnet
+- Routing
+- IP Interface
+- Port Configuration
+- STP Global
+- STP Per-Port
+
 
 This guide provides practical NETCONF XML examples to help you manage and configure your network device. NETCONF (Network Configuration Protocol) is a standardized protocol for managing network devices, using XML-based data encoding for configuration and operational data.
 
 These examples cover common tasks such as:
-*   Retrieving current configurations and operational state.
-*   Modifying device settings for interfaces, VLANs, remote access (SSH/Telnet), IP routing, IP addressing, port-specific features, and Spanning Tree Protocol (STP).
+*   Retrieving current configurations and operational state using simplified RPCs.
+*   Modifying device settings for interfaces, VLANs, remote access (SSH/Telnet), IP routing, IP addressing, port-specific features, Port Channels (LAGs), and Spanning Tree Protocol (STP) using simplified RPCs.
 
 **Key NETCONF Concepts Used in This Guide:**
 
-*   **`<rpc>`:** The root element for every NETCONF request. It includes a `message-id` attribute, which is a string chosen by the client to uniquely identify the request. The server will use the same `message-id` in its response.
+*   **`<rpc>`:** The root element for every NETCONF request. For the simplified RPCs shown, `message-id` and the base NETCONF namespace on the `<rpc>` tag are often omitted for brevity, though standard clients might still send them. The server will internally track message IDs.
 *   **`<get>`:** Retrieves operational state data and configuration data.
-*   **`<get-config>`:** Retrieves configuration data. You specify the datastore to retrieve from (e.g., `<running/>` for the active configuration).
-*   **`<edit-config>`:** Modifies configuration data. You specify the target datastore (e.g., `<running/>`) and provide the configuration changes within a `<config>` element.
-*   **`<filter type="subtree">`:** Used with `<get>` or `<get-config>` to specify which parts of the configuration or state data you want to retrieve. You provide an XML structure representing the desired data.
 *   **`<config>`:** Used within `<edit-config>` to enclose the configuration data you want to apply.
 *   **`xmlns` (XML Namespace):** An attribute used to qualify XML elements and attributes, preventing naming conflicts. Each data model (e.g., for VLANs, interfaces) will have its own namespace.
 *   **`operation` attribute:** Used within `<edit-config>` on specific data nodes to indicate the action to perform (e.g., `create`, `delete`, `merge`, `replace`).
 
 ---
+<br><br><br><br><br><br><br><br><br><br><br><br><br>
 
-## 1. Interface Configuration
+## 1. Interface Information (Custom GET)
 This section covers how to retrieve detailed information about all network interfaces on the device.
+The response format for this specific `<get>` operation is a custom XML structure, where interface data is directly under an `<rpc-reply>` root element, with each interface name as a dynamic tag.
 
 ### Get Interface Information
 Retrieves operational status and configuration for all interfaces.
@@ -38,7 +48,8 @@ Retrieves operational status and configuration for all interfaces.
 
 ## 2. VLAN Configuration
 Virtual Local Area Networks (VLANs) allow you to segment your network. This section shows how to view and manage VLANs.
-
+The response for GET operations will be an `<rpc-reply>` with a `<data>` wrapper, and the `<vlans>` element within will use `xmlns="yang:vlan"`.
+The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 ### Get VLANs
 Retrieves a list of all configured VLANs and their names. The response format for this specific `<get>` operation is a custom XML structure, where VLAN data is directly under a `<vlans>` element.
 
@@ -75,7 +86,8 @@ Creates a new VLAN or modifies an existing one.
 
 ## 3. SSH Server Configuration
 Secure Shell (SSH) provides secure remote access to the device.
-
+The response for GET operations will be an `<rpc-reply>` with the `<ssh-server-config>` data directly under it, using `xmlns="yang:ssh"`.
+The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 
 ### Get SSH Status
 Checks if the SSH server is currently enabled or disabled.
@@ -128,7 +140,8 @@ Turns off the SSH server.
 
 ## 4. Telnet Server Configuration
 Telnet provides remote access, but it's less secure than SSH as data is sent in clear text.
-
+The response for GET operations will be an `<rpc-reply>` with the `<telnet-server-config>` data directly under it, using `xmlns="yang:telnet"`.
+The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 
 ### Get Telnet Status
 Checks if the Telnet server is currently enabled or disabled.
@@ -181,11 +194,23 @@ Turns off the Telnet server.
 
 ## 5. Static Routing
 Static routes manually define paths for IP traffic.
+The response for GET operations will be an `<rpc-reply>` with the `<routing>` data directly under it, using `xmlns="yang:route"`.
+The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 
+### Get All Static Routes
+Retrieves all configured static IP routes.
+
+```xml
+<rpc>
+  <get>
+    <routing xmlns="yang:get_route"/>
+  </get>
+</rpc>
+]]>]]>
+```
 
 ### Add Static Route
 Adds a new static IP route to the device's routing table. The `operation="create"` attribute indicates that a new route entry should be created.
-
 
 ```xml
 <rpc>
@@ -440,20 +465,3 @@ Turns off STP for the entire device.
 </rpc>
 ]]>]]>
 ```
-
----
-
-## Important Notes
-
-* **Placeholders**: The XML examples use placeholder values for interface names (e.g., `te1/0/1`), VLAN IDs (e.g., `19`), IP addresses, etc. You must replace these with the actual values relevant to your device and desired configuration.
-* **Message ID (`message-id`):** While the examples use sequential message IDs (e.g., `101`, `102`), you can use any unique string. The server will echo this ID in its response, helping you match requests with replies.
-* **Device Capabilities**: Before attempting these operations, it's good practice to check the device's capabilities, which are advertised in its initial NETCONF `<hello>` message. This tells you which NETCONF features and YANG data models the device supports.
-* **Datastores**: <edit-config> typically targets the `<running/>` datastore (the active configuration). Other datastores like `<candidate/>` (for a staging area before committing) might be supported depending on the device.
-* **Error Handling**: If a NETCONF operation fails, the server will respond with an `<rpc-error>` element containing details about the error.
-
----
-
-For more on NETCONF and YANG:
-
-* [RFC 6241 - NETCONF](https://datatracker.ietf.org/doc/html/rfc6241)
-* [YANG Language Tutorial](https://tools.ietf.org/html/rfc6020)

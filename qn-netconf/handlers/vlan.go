@@ -15,25 +15,19 @@ import (
 )
 
 // VlanNamespace is the XML namespace for VLAN configuration.
-const VlanNamespace = "urn:example:params:xml:ns:yang:vlan"
-const NetconfBaseNamespace = "urn:ietf:params:xml:ns:netconf:base:1.0"
+// Changed to align with the namespace observed in the client's <get> filter.
+const VlanNamespace = "yang:get_vlan"
+const NetconfBaseNamespace = "yang:vlan"
 
 // --- XML Data Structures ---
 
 // RpcReply is the generic NETCONF rpc-reply structure.
 type RpcReply struct {
-	// Changed XMLName to remove the base NETCONF namespace from the marshalled output.
-	XMLName xml.Name `xml:"rpc-reply"`
-	// Removed the xml tag for MessageID to prevent it from being marshalled as an attribute.
-	MessageID string
-	Data      *Data      `xml:"data,omitempty"`
-	Ok        *Ok        `xml:"ok,omitempty"`
-	Errors    []RPCError `xml:"rpc-error,omitempty"`
-}
-
-// Ok represents the <ok/> element.
-type Ok struct {
-	XMLName xml.Name `xml:"ok"`
+	// XMLName specifies the namespace and local name for <rpc-reply>, aligning with NETCONF base.
+	XMLName xml.Name   `xml:"yang:vlan rpc-reply"`
+	Data    *Data      `xml:"data,omitempty"`
+	Result  string     `xml:"result,omitempty"` // Changed from Ok to Result
+	Errors  []RPCError `xml:"rpc-error,omitempty"`
 }
 
 // Data wraps the actual data payload.
@@ -44,8 +38,8 @@ type Data struct {
 
 // VlansHolder is the container for a list of VLANs in responses.
 type VlansHolder struct {
-	// Changed namespace in the XMLName tag to match the requested output
-	XMLName xml.Name    `xml:"yang:vlan vlans"`
+	// Aligned namespace with the VlanNamespace constant and client's request filter.
+	XMLName xml.Name    `xml:"yang:get_vlan vlans"`
 	Vlan    []VlanEntry `xml:"vlan"`
 }
 
@@ -91,7 +85,7 @@ type VlanConfigEntry struct {
 	ID        int      `xml:"id"`
 	Name      string   `xml:"name"`
 	Status    string   `xml:"status,omitempty"`
-	Operation string   `xml:"urn:ietf:params:xml:ns:netconf:base:1.0 operation,attr,omitempty"`
+	Operation string   `xml:"yang:vlan operation,attr,omitempty"`
 }
 
 // InitVlanDB is called during server startup.
@@ -111,8 +105,8 @@ func marshalToXML(data interface{}, frameEnd string) []byte {
 			NetconfBaseNamespace, frameEnd,
 		))
 	}
-	// Prepend XML declaration
-	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+	// Prepend XML declaration, add a newline before frameEnd
+	return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 }
 
 // BuildGetVlansResponse constructs the NETCONF rpc-reply for a get-vlans request.
@@ -129,21 +123,21 @@ func BuildGetVlansResponse(miyagiSocketPath, msgID, frameEnd string) []byte {
 	miyagiResp, err := miyagi.SendRequest(miyagiSocketPath, miyagiReq)
 	if err != nil {
 		log.Printf("NETCONF_VLAN_HANDLER: Error calling Miyagi for Get.VLAN.Table: %v", err)
-		return buildErrorResponseBytes(msgID, "operation-failed", fmt.Sprintf("Failed to retrieve VLANs from device: %v", err), frameEnd)
+		return buildErrorResponseBytes("operation-failed", fmt.Sprintf("Failed to retrieve VLANs from device: %v", err), frameEnd)
 	}
 
 	if miyagiResp.Error != nil {
 		errMsg := fmt.Sprintf("Device error retrieving VLANs: %s (code: %d)", miyagiResp.Error.Message, miyagiResp.Error.Code)
 		log.Printf("NETCONF_VLAN_HANDLER: Miyagi returned error for Get.VLAN.Table: %s", errMsg)
-		return buildErrorResponseBytes(msgID, "operation-failed", errMsg, frameEnd)
+		return buildErrorResponseBytes("operation-failed", errMsg, frameEnd)
 	}
 
 	// Miyagi's "Agent.Switch.Get.VLAN.Table" returns a direct map of VLAN ID (string) to VLAN Name (string)
 	// within its "result" field. Example miyagiResp.Result (json.RawMessage): `{"1":"Default","2":"Account",...}`
 	var vlanMapResult map[string]string
 	if err := json.Unmarshal(miyagiResp.Result, &vlanMapResult); err != nil {
-		log.Printf("NETCONF_VLAN_HANDLER: Error unmarshalling Miyagi response for Get.VLAN.Table: %v. Raw: %s", err, string(miyagiResp.Result))
-		return buildErrorResponseBytes(msgID, "operation-failed", "Failed to parse VLAN data from device", frameEnd)
+		log.Printf("NETCONF_VLAN_HANDLER: Error unmarshalling Miyagi response for Get.VLAN.Table (msgID: %s): %v. Raw: %s", msgID, err, string(miyagiResp.Result))
+		return buildErrorResponseBytes("operation-failed", "Failed to parse VLAN data from device", frameEnd)
 	}
 
 	if len(vlanMapResult) == 0 {
@@ -170,12 +164,11 @@ func BuildGetVlansResponse(miyagiSocketPath, msgID, frameEnd string) []byte {
 	// Marshal VlansHolder to XML bytes first
 	vlansXMLBytes, err := xml.MarshalIndent(vlansData, "    ", "  ") // Indent within <data>
 	if err != nil {
-		log.Printf("NETCONF_VLAN_HANDLER: Error marshalling VlansHolder: %v", err)
-		return buildErrorResponseBytes(msgID, "operation-failed", "Failed to format VLAN data for XML response", frameEnd)
+		log.Printf("NETCONF_VLAN_HANDLER: Error marshalling VlansHolder (msgID: %s): %v", msgID, err)
+		return buildErrorResponseBytes("operation-failed", "Failed to format VLAN data for XML response", frameEnd)
 	}
 
 	reply := RpcReply{
-		MessageID: msgID,
 		Data: &Data{
 			VlansData: vlansXMLBytes, // Embed the marshalled <vlans>...</vlans>
 		},
@@ -199,30 +192,30 @@ func HandleEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd s
 	configTagStart := []byte("<config>")
 	configTagEnd := []byte("</config>")
 
-	configStartIdx := bytes.Index(request, configTagStart)
-	if configStartIdx == -1 {
+	configStartIdx := bytes.Index(request, configTagStart) //
+	if configStartIdx == -1 {                              //
 		log.Printf("NETCONF_VLAN_HANDLER: <config> tag not found in request for msgID %s.", msgID)
-		return buildErrorResponseBytes(msgID, "malformed-message", "Missing <config> element in edit-config", frameEnd)
+		return buildErrorResponseBytes("malformed-message", "Missing <config> element in edit-config", frameEnd)
 	}
 
 	configEndIdx := bytes.Index(request[configStartIdx:], configTagEnd)
 	if configEndIdx == -1 {
 		log.Printf("NETCONF_VLAN_HANDLER: Closing </config> tag not found for msgID %s.", msgID)
-		return buildErrorResponseBytes(msgID, "malformed-message", "Malformed <config> element in edit-config", frameEnd)
+		return buildErrorResponseBytes("malformed-message", "Malformed <config> element in edit-config", frameEnd)
 	}
 
 	configContent := request[configStartIdx : configStartIdx+configEndIdx+len(configTagEnd)]
-
+	//
 	var payload EditConfigPayload
 	err := xml.Unmarshal(configContent, &payload)
 	if err != nil {
 		log.Printf("NETCONF_VLAN_HANDLER: Failed to unmarshal <config> XML for msgID %s: %v. Content: %s", msgID, err, string(configContent))
-		return buildErrorResponseBytes(msgID, "invalid-value", fmt.Sprintf("Malformed VLAN configuration in edit-config: %v", err), frameEnd)
+		return buildErrorResponseBytes("invalid-value", fmt.Sprintf("Malformed VLAN configuration in edit-config: %v", err), frameEnd)
 	}
 
 	if payload.Vlans.XMLName.Local == "" { // Check if Vlans was parsed
 		log.Printf("NETCONF_VLAN_HANDLER: <vlans> section not found or not parsed in <config> for msgID %s.", msgID)
-		return buildErrorResponseBytes(msgID, "invalid-value", "Missing or malformed <vlans> section in configuration", frameEnd)
+		return buildErrorResponseBytes("invalid-value", "Missing or malformed <vlans> section in configuration", frameEnd)
 	}
 
 	log.Printf("NETCONF_VLAN_HANDLER: XML unmarshal successful for msgID %s. Parsed %d VLAN entries.", msgID, len(payload.Vlans.VlanEntries))
@@ -238,7 +231,7 @@ func HandleEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd s
 
 		if vlanEntry.ID == 0 { // Basic validation
 			log.Printf("NETCONF_VLAN_HANDLER: Invalid VLAN ID '0' in edit-config for msgID %s", msgID)
-			return buildErrorResponseBytes(msgID, "invalid-value", "VLAN ID '0' is not allowed", frameEnd)
+			return buildErrorResponseBytes("invalid-value", "VLAN ID '0' is not allowed", frameEnd)
 		}
 
 		miyagiReq := miyagi.MiyagiRequest{
@@ -257,34 +250,30 @@ func HandleEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd s
 		if miyagiErr != nil {
 			errMsg := fmt.Sprintf("Failed to configure VLAN %d (%s) on device: %v", vlanEntry.ID, vlanEntry.Name, miyagiErr)
 			log.Printf("NETCONF_VLAN_HANDLER: Error calling Miyagi for Set.VLAN.Create (VLAN %d): %v", vlanEntry.ID, miyagiErr)
-			return buildErrorResponseBytes(msgID, "operation-failed", errMsg, frameEnd)
+			return buildErrorResponseBytes("operation-failed", errMsg, frameEnd)
 		}
 
 		if miyagiResp.Error != nil {
 			errMsg := fmt.Sprintf("Device error configuring VLAN %d (%s): %s (code: %d)", vlanEntry.ID, vlanEntry.Name, miyagiResp.Error.Message, miyagiResp.Error.Code)
 			log.Printf("NETCONF_VLAN_HANDLER: Miyagi returned error for Set.VLAN.Create (VLAN %d): %s", vlanEntry.ID, errMsg)
-			return buildErrorResponseBytes(msgID, "operation-failed", errMsg, frameEnd)
+			return buildErrorResponseBytes("operation-failed", errMsg, frameEnd)
 		}
 		log.Printf("NETCONF_VLAN_HANDLER: Successfully processed edit-config for VLAN ID %d, Name: %s", vlanEntry.ID, vlanEntry.Name)
 	}
 
-	return buildOKResponseBytes(msgID, frameEnd)
+	return buildOKResponseBytes(frameEnd)
 }
 
 // buildOKResponseBytes creates a NETCONF <ok/> response.
-func buildOKResponseBytes(msgID, frameEnd string) []byte {
-	reply := RpcReply{
-		MessageID: msgID,
-		Ok:        &Ok{},
-	}
+func buildOKResponseBytes(frameEnd string) []byte {
+	reply := RpcReply{Result: "ok"} // Populate Result field instead of Ok
 	return marshalToXML(reply, frameEnd)
 }
 
 // buildErrorResponseBytes creates a NETCONF <rpc-error> response.
-func buildErrorResponseBytes(msgID, errTag, errMsg, frameEnd string) []byte {
+func buildErrorResponseBytes(errTag, errMsg, frameEnd string) []byte {
 	// XML marshaler handles escaping of characters like <, >, & in string fields.
 	reply := RpcReply{
-		MessageID: msgID,
 		Errors: []RPCError{
 			{
 				ErrorType:     "application", // Or "protocol", "rpc", "transport"

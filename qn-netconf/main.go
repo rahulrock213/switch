@@ -105,13 +105,11 @@ func init() {
 
 func main() {
 	var err error
-	appConfig, err = LoadConfig("config.json")
+	// in main()
+	appConfig, err = LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
-
-	// Initialize handlers that might need config (example)
-	handlers.InitVlanDB() // Corrected: InitVlanDB takes no args
 
 	config := &ssh.ServerConfig{
 		PasswordCallback: passwordCallback,
