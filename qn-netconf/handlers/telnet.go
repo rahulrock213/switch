@@ -11,7 +11,7 @@ import (
 	"qn-netconf/miyagi" // Assuming your miyagi client is in "qn-netconf/miyagi"
 )
 
-const TelnetConfigNamespace = "urn:example:params:xml:ns:yang:telnet-server-config"
+const TelnetConfigNamespace = "urn:example:params:xml:ns:yang:telnet"
 const NetconfBaseNamespaceTelnet = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures (for Telnet handler) ---
@@ -19,13 +19,9 @@ const NetconfBaseNamespaceTelnet = "urn:ietf:params:xml:ns:netconf:base:1.0"
 type RpcReplyTelnet struct {
 	// Simplified RpcReply structure
 	XMLName      xml.Name                `xml:"rpc-reply"`
-	TelnetConfig *TelnetServerConfigData `xml:"telnet-server-config,omitempty"` // For GET response
-	Ok           *OkTelnet               `xml:"ok,omitempty"`                   // For edit-config response
+	TelnetConfig *TelnetServerConfigData `xml:"telnet,omitempty"` // For GET response
+	Result       string                  `xml:"result,omitempty"` // For edit-config response
 	Errors       []RPCErrorTelnet        `xml:"rpc-error,omitempty"`
-}
-
-type OkTelnet struct { // Remains the same
-	XMLName xml.Name `xml:"ok"`
 }
 
 type RPCErrorTelnet struct {
@@ -38,18 +34,18 @@ type RPCErrorTelnet struct {
 
 // --- Telnet Specific XML Data Structures ---
 
-// TelnetServerConfigData is used for <telnet-server-config> in <data> or <config>
+// TelnetServerConfigData is used for <telnet> in <data> or <config>
 type TelnetServerConfigData struct {
 	// XMLName made namespace-agnostic for flexible unmarshalling in edit-config.
 	// Namespace will be explicitly set when marshalling for GET response.
-	XMLName xml.Name `xml:"telnet-server-config"`
+	XMLName xml.Name `xml:"telnet"`
 	Enabled *bool    `xml:"enabled,omitempty"` // Use pointer to distinguish not present vs. explicit false
 }
 
 // EditConfigTelnetPayload is used to parse the <config> part of an <edit-config> for Telnet
 type EditConfigTelnetPayload struct {
 	XMLName      xml.Name                `xml:"config"`
-	TelnetConfig *TelnetServerConfigData `xml:"telnet-server-config"`
+	TelnetConfig *TelnetServerConfigData `xml:"telnet"`
 }
 
 // --- Handler Functions ---
@@ -88,7 +84,7 @@ func HandleTelnetGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 
 	telnetConfigPayload := TelnetServerConfigData{
 		// Explicitly set XMLName with desired namespace for GET response
-		XMLName: xml.Name{Space: "yang:telnet", Local: "telnet-server-config"},
+		XMLName: xml.Name{Space: "yang:telnet", Local: "telnet"},
 		Enabled: &telnetEnabled,
 	}
 
@@ -116,8 +112,8 @@ func HandleTelnetEditConfig(miyagiSocketPath string, request []byte, msgID, fram
 	}
 
 	if editReq.TelnetConfig == nil || editReq.TelnetConfig.Enabled == nil {
-		log.Printf("NETCONF_TELNET_HANDLER: Malformed Telnet <edit-config>, <telnet-server-config><enabled> missing.")
-		return buildErrorResponseBytesTelnet(msgID, "protocol", "missing-element", "<telnet-server-config><enabled> is required", frameEnd)
+		log.Printf("NETCONF_TELNET_HANDLER: Malformed Telnet <edit-config>, <telnet><enabled> missing.")
+		return buildErrorResponseBytesTelnet(msgID, "protocol", "missing-element", "<telnet><enabled> is required", frameEnd)
 	}
 
 	var miyagiUID string
@@ -147,7 +143,7 @@ func HandleTelnetEditConfig(miyagiSocketPath string, request []byte, msgID, fram
 
 	reply := RpcReplyTelnet{
 		// MessageID is no longer part of RpcReplyTelnet
-		Ok: &OkTelnet{},
+		Result: "ok",
 	}
 	return marshalToXMLTelnet(reply, frameEnd)
 }
@@ -163,7 +159,7 @@ func marshalToXMLTelnet(data interface{}, frameEnd string) []byte {
 			NetconfBaseNamespaceTelnet, frameEnd,
 		))
 	}
-	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+	return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 }
 
 func buildErrorResponseBytesTelnet(msgID, errType, errTag, errMsg, frameEnd string) []byte {

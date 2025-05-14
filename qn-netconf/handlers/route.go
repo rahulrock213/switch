@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"bytes"
-	"encoding/json"
+	// "encoding/json" // No longer needed for GET
 	"encoding/xml"
 	"fmt"
 	"log"
@@ -17,10 +17,10 @@ const NetconfBaseNamespaceRoute = "urn:ietf:params:xml:ns:netconf:base:1.0"
 // --- Common NETCONF XML Data Structures (for Route handler) ---
 
 type RpcReplyRoute struct {
-	XMLName       xml.Name                `xml:"rpc-reply"`
-	RoutingConfig *RoutingDataGetResponse `xml:"routing,omitempty"` // For GET response
-	Ok            *OkRoute                `xml:"ok,omitempty"`      // For edit-config response
-	Errors        []RPCErrorRoute         `xml:"rpc-error,omitempty"`
+	XMLName xml.Name `xml:"rpc-reply"`
+	// RoutingConfig *RoutingDataGetResponse `xml:"routing,omitempty"` // Removed: For GET response
+	Ok     *OkRoute        `xml:"ok,omitempty"` // For edit-config response
+	Errors []RPCErrorRoute `xml:"rpc-error,omitempty"`
 }
 
 type OkRoute struct {
@@ -67,44 +67,44 @@ type RouteData struct {
 	NextHop   string   `xml:"next-hop,omitempty"` // Optional for delete
 }
 
-// --- Structures for GET response ---
-
-// RoutingDataGetResponse is for the <routing> container in a GET response.
-type RoutingDataGetResponse struct {
-	XMLName      xml.Name                     `xml:"yang:route routing"` // Namespace for GET response
-	StaticRoutes *StaticRoutesDataGetResponse `xml:"static-routes"`
-}
-
-// StaticRoutesDataGetResponse corresponds to <static-routes> in a GET response.
-type StaticRoutesDataGetResponse struct {
-	XMLName xml.Name               `xml:"static-routes"`
-	Routes  []RouteDataGetResponse `xml:"route"`
-}
-
-// RouteDataGetResponse corresponds to a single <route> in a GET response.
-type RouteDataGetResponse struct {
-	XMLName xml.Name `xml:"route"` // No operation attribute for GET
-	Prefix  string   `xml:"prefix"`
-	Mask    string   `xml:"mask"`
-	NextHop string   `xml:"next-hop"`
-}
+// --- Structures for GET response --- (REMOVED)
 
 // --- Handler Function ---
 
 // HandleRouteEditConfig handles <edit-config> for static routes
 func HandleRouteEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd string) []byte {
-	var editReq EditConfigRoutingPayload
-	configStartIndex := bytes.Index(request, []byte("<config>"))
-	configEndIndex := bytes.LastIndex(request, []byte("</config>"))
-
-	if configStartIndex == -1 || configEndIndex == -1 || configStartIndex >= configEndIndex {
-		log.Printf("NETCONF_ROUTE_HANDLER: Malformed <edit-config> request, <config> tag not found or invalid: %s", string(request))
-		return buildErrorResponseBytesRoute(msgID, "protocol", "malformed-message", "Malformed <edit-config> request", frameEnd)
+	var editReq EditConfigRoutingPayload // editReq will be unmarshalled from the <config> part of the request
+	// Find the <config> element within the request.
+	// The request bytes might contain the full RPC message including <rpc> and <edit-config> tags.
+	// We need to extract the content within <config>...</config> for unmarshalling.
+	configContentStart := bytes.Index(request, []byte("<config>"))
+	if configContentStart == -1 {
+		log.Printf("NETCONF_ROUTE_HANDLER: Malformed <edit-config> request, <config> tag not found: %s", string(request))
+		return buildErrorResponseBytesRoute(msgID, "protocol", "malformed-message", "Malformed <edit-config> request, missing <config> tag", frameEnd)
 	}
-	configPayload := request[configStartIndex : configEndIndex+len("</config>")]
+	// Adjust configContentStart to be after the <config> tag itself.
+	configContentStart += len("<config>")
 
-	if err := xml.Unmarshal(configPayload, &editReq); err != nil {
-		log.Printf("NETCONF_ROUTE_HANDLER: Error unmarshalling routing <edit-config> payload: %v. Payload: %s", err, string(configPayload))
+	configContentEnd := bytes.LastIndex(request, []byte("</config>"))
+	if configContentEnd == -1 || configContentEnd < configContentStart {
+		log.Printf("NETCONF_ROUTE_HANDLER: Malformed <edit-config> request, </config> tag not found or misplaced: %s", string(request))
+		return buildErrorResponseBytesRoute(msgID, "protocol", "malformed-message", "Malformed <edit-config> request, missing or misplaced </config> tag", frameEnd)
+	}
+
+	// configPayload := request[configContentStart:configContentEnd] // This would be the *inner* content of <config>
+
+	// We need to unmarshal the entire <config>...</config> block into EditConfigRoutingPayload.
+	configBlockStartIndex := bytes.Index(request, []byte("<config>"))
+	configBlockEndIndex := bytes.LastIndex(request, []byte("</config>")) + len("</config>")
+	if configBlockStartIndex == -1 || configBlockEndIndex < configBlockStartIndex+len("<config>") {
+		// This should have been caught earlier, but as a safeguard.
+		log.Printf("NETCONF_ROUTE_HANDLER: Internal error determining full <config> block for unmarshalling. Payload: %s", string(request))
+		return buildErrorResponseBytesRoute(msgID, "protocol", "malformed-message", "Internal error processing <config> block", frameEnd)
+	}
+	fullConfigBlock := request[configBlockStartIndex:configBlockEndIndex]
+
+	if err := xml.Unmarshal(fullConfigBlock, &editReq); err != nil {
+		log.Printf("NETCONF_ROUTE_HANDLER: Error unmarshalling routing <edit-config> payload: %v. Payload: %s", err, string(fullConfigBlock))
 		return buildErrorResponseBytesRoute(msgID, "protocol", "malformed-message", "Invalid routing configuration format", frameEnd)
 	}
 
@@ -209,58 +209,4 @@ func buildErrorResponseBytesRoute(msgID, errType, errTag, errMsg, frameEnd strin
 	return marshalToXMLRoute(reply, frameEnd)
 }
 
-// HandleRouteGetConfig handles <get> or <get-config> for static routes
-func HandleRouteGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
-	miyagiReq := miyagi.MiyagiRequest{
-		Method: "call",
-		Params: map[string]interface{}{
-			"uid": "Agent.Switch.Get.IPRouting.Table", // Assumed Miyagi UID
-			"arg": nil,
-		},
-		ID: 9, // Static ID for this Miyagi request
-	}
-
-	miyagiResp, err := miyagi.SendRequest(miyagiSocketPath, miyagiReq)
-	if err != nil {
-		log.Printf("NETCONF_ROUTE_HANDLER: Error calling Miyagi for Get.IPRouting.Table: %v", err)
-		return buildErrorResponseBytesRoute(msgID, "application", "operation-failed", "Error communicating with device agent for routes", frameEnd)
-	}
-
-	if miyagiResp.Error != nil {
-		errMsg := fmt.Sprintf("Device error retrieving routes: %s (code: %d)", miyagiResp.Error.Message, miyagiResp.Error.Code)
-		log.Printf("NETCONF_ROUTE_HANDLER: Miyagi returned error for Get.IPRouting.Table: %s", errMsg)
-		return buildErrorResponseBytesRoute(msgID, "application", "operation-failed", errMsg, frameEnd)
-	}
-
-	// Assuming Miyagi returns a JSON array of route objects
-	var miyagiRoutes []RouteDataGetResponse // Use the GET response struct directly
-	if err := json.Unmarshal(miyagiResp.Result, &miyagiRoutes); err != nil {
-		log.Printf("NETCONF_ROUTE_HANDLER: Error unmarshalling Miyagi route table: %v. Raw: %s", err, string(miyagiResp.Result))
-		return buildErrorResponseBytesRoute(msgID, "application", "operation-failed", "Failed to parse route data from device", frameEnd)
-	}
-
-	// Prepare the data for XML marshalling
-	var routesForXML []RouteDataGetResponse
-	for _, r := range miyagiRoutes {
-		routesForXML = append(routesForXML, RouteDataGetResponse{
-			// XMLName will be set by the struct tag "route"
-			Prefix:  r.Prefix,
-			Mask:    r.Mask,
-			NextHop: r.NextHop,
-		})
-	}
-
-	routingConfig := RoutingDataGetResponse{
-		// XMLName includes "yang:route routing"
-		StaticRoutes: &StaticRoutesDataGetResponse{
-			Routes: routesForXML,
-		},
-	}
-
-	reply := RpcReplyRoute{
-		// MessageID is no longer part of RpcReplyRoute
-		RoutingConfig: &routingConfig,
-	}
-
-	return marshalToXMLRoute(reply, frameEnd)
-}
+// HandleRouteGetConfig handles <get> or <get-config> for static routes (REMOVED)

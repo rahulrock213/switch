@@ -208,30 +208,50 @@ The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`
 ### Get Telnet Status
 Checks if the Telnet server is currently enabled or disabled.
 
-
+#### Request
 ```xml
 <rpc>
   <get>
-    <telnet-server-config xmlns="yang:get_telnet"/>
+    <telnet xmlns="yang:get_telnet"/>
   </get>
  </rpc>
  ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <telnet>
+    <enabled>false</enabled>
+  </telnet>
+</rpc-reply>
+]]>]]>
+```
+
 ### Enable Telnet
 Turns on the Telnet server.
 
-
+#### Request
 ```xml
 <rpc >
   <edit-config>
     <config>
-      <telnet-server-config xmlns="yang:set_telnet">
+      <telnet xmlns="yang:set_telnet">
         <enabled>true</enabled>
-      </telnet-server-config>
+      </telnet>
     </config>
   </edit-config>
 </rpc>
+]]>]]>
+```
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
 ]]>]]>
 ```
 
@@ -239,16 +259,26 @@ Turns on the Telnet server.
 Turns off the Telnet server.
 
 
+#### Request
 ```xml
 <rpc >
   <edit-config>
     <config>
-      <telnet-server-config xmlns="yang:set_telnet">
+      <telnet xmlns="yang:set_telnet">
         <enabled>false</enabled>
-      </telnet-server-config>
+      </telnet>
     </config>
   </edit-config>
 </rpc>
+]]>]]>
+```
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
 ]]>]]>
 ```
 

@@ -63,10 +63,10 @@ func init() {
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh xmlns=\"%s\">", handlers.SshConfigNamespace))) {
 				log.Printf("NETCONF_SERVER: Dispatching to HandleSSHEditConfig with original namespace. Message ID: %s", msgID)
 				return handlers.HandleSSHEditConfig(miyagiSocketPath, request, msgID, frameEnd)
-			} else if bytes.Contains(request, []byte("<telnet-server-config xmlns=\"yang:set_telnet\">")) {
+			} else if bytes.Contains(request, []byte("<telnet xmlns=\"yang:set_telnet\">")) {
 				log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetEditConfig with custom 'yang:set_telnet' namespace. Message ID: %s", msgID)
 				return handlers.HandleTelnetEditConfig(miyagiSocketPath, request, msgID, frameEnd)
-			} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\">", handlers.TelnetConfigNamespace))) {
+			} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet xmlns=\"%s\">", handlers.TelnetConfigNamespace))) {
 				return handlers.HandleTelnetEditConfig(miyagiSocketPath, request, msgID, frameEnd)
 			} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\">", handlers.RoutingNamespace))) {
 				return handlers.HandleRouteEditConfig(miyagiSocketPath, request, msgID, frameEnd)
@@ -277,15 +277,14 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>%s</capability> <!-- VLAN Capability -->
     <capability>%s</capability> <!-- Interface Capability -->
     <capability>%s</capability> <!-- SSH Server Config Capability -->
-    <capability>%s</capability> <!-- Telnet Server Config Capability -->
-    <capability>%s</capability> <!-- Routing Capability -->
+    <capability>%s</capability> <!-- Telnet Server Config Capability -->    
     <capability>%s</capability> <!-- IP Interface Capability -->
     <capability>%s</capability> <!-- Port Configuration Capability -->
     <capability>%s</capability> <!-- STP Global Configuration Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
-%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, handlers.RoutingNamespace, handlers.IpInterfaceNamespace, handlers.PortConfigNamespace, handlers.StpGlobalConfigNamespace, sessionID, appConfig.FrameEnd)
+%s`, handlers.VlanNamespace, handlers.InterfaceNamespace, handlers.SshConfigNamespace, handlers.TelnetConfigNamespace, handlers.IpInterfaceNamespace, handlers.PortConfigNamespace, handlers.StpGlobalConfigNamespace, sessionID, appConfig.FrameEnd)
 	// Added handlers.StpGlobalConfigNamespace to advertise STP Global Configuration capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
@@ -376,21 +375,13 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<ssh xmlns=\"%s\"", handlers.SshConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get> with SSH filter. Message ID: %s", msgID)
 			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-		} else if bytes.Contains(request, []byte("<telnet-server-config")) &&
+		} else if bytes.Contains(request, []byte("<telnet")) &&
 			(bytes.Contains(request, []byte("xmlns=\"yang:get_telnet\"")) || bytes.Contains(request, []byte("xmlns='yang:get_telnet'"))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get> with custom 'yang:get_telnet' namespace. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get> with Telnet filter. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-			// Routing checks for <get>
-		} else if bytes.Contains(request, []byte("<routing")) &&
-			(bytes.Contains(request, []byte("xmlns=\"yang:get_route\"")) || bytes.Contains(request, []byte("xmlns='yang:get_route'"))) {
-			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get> with custom 'yang:get_route' namespace. Message ID: %s", msgID)
-			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-		} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) {
-			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get> with original Routing filter. Message ID: %s", msgID)
-			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 			// IP Interface checks for <get>
 		} else if bytes.Contains(request, []byte("<ip-interfaces")) &&
 			(bytes.Contains(request, []byte("xmlns=\"yang:get_ip_interface\"")) || bytes.Contains(request, []byte("xmlns='yang:get_ip_interface'"))) {
@@ -454,21 +445,13 @@ func generateResponse(request []byte) []byte {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleSSHGetConfig for <get-config> with SSH filter. Message ID: %s", msgID)
 			return handlers.HandleSSHGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 			// Telnet checks
-		} else if bytes.Contains(request, []byte("<telnet-server-config")) &&
+		} else if bytes.Contains(request, []byte("<telnet")) &&
 			(bytes.Contains(request, []byte("xmlns=\"yang:get_telnet\"")) || bytes.Contains(request, []byte("xmlns='yang:get_telnet'"))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get-config> with custom 'yang:get_telnet' namespace. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet-server-config xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
+		} else if bytes.Contains(request, []byte(fmt.Sprintf("<telnet xmlns=\"%s\"", handlers.TelnetConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleTelnetGetConfig for <get-config> with Telnet filter. Message ID: %s", msgID)
 			return handlers.HandleTelnetGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-			// Routing checks for <get-config>
-		} else if bytes.Contains(request, []byte("<routing")) &&
-			(bytes.Contains(request, []byte("xmlns=\"yang:get_route\"")) || bytes.Contains(request, []byte("xmlns='yang:get_route'"))) {
-			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with custom 'yang:get_route' namespace. Message ID: %s", msgID)
-			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
-		} else if bytes.Contains(request, []byte(fmt.Sprintf("<routing xmlns=\"%s\"", handlers.RoutingNamespace))) { // Fallback for original routing namespace
-			log.Printf("NETCONF_SERVER: Dispatching to HandleRouteGetConfig for <get-config> with original Routing filter. Message ID: %s", msgID)
-			return handlers.HandleRouteGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
 		} else if bytes.Contains(request, []byte("<port-channels")) && // Port Channel get-config (short namespace)
 			(bytes.Contains(request, []byte("xmlns=\"yang:get_port_channel\"")) || bytes.Contains(request, []byte("xmlns='yang:get_port_channel'"))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleLagGetConfig for <get-config> with custom 'yang:get_port_channel' namespace. Message ID: %s", msgID)
