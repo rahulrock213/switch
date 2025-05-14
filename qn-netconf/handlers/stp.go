@@ -18,12 +18,8 @@ const NetconfBaseNamespaceStp = "urn:ietf:params:xml:ns:netconf:base:1.0"
 type RpcReplyStp struct {
 	XMLName         xml.Name             `xml:"rpc-reply"`                   // Simplified root
 	StpGlobalConfig *StpGlobalConfigData `xml:"stp-global-config,omitempty"` // For GET response
-	Ok              *OkStp               `xml:"ok,omitempty"`                // For edit-config response
+	Result          string               `xml:"result,omitempty"`            // For edit-config response
 	Errors          []RPCErrorStp        `xml:"rpc-error,omitempty"`
-}
-
-type OkStp struct {
-	XMLName xml.Name `xml:"ok"`
 }
 
 type RPCErrorStp struct {
@@ -136,7 +132,7 @@ func HandleStpEditConfig(miyagiSocketPath string, request []byte, msgID, frameEn
 
 	reply := RpcReplyStp{
 		// MessageID is no longer part of RpcReplyStp
-		Ok: &OkStp{},
+		Result: "ok",
 	}
 	return marshalToXMLStp(reply, frameEnd)
 }
@@ -148,7 +144,7 @@ func marshalToXMLStp(data interface{}, frameEnd string) []byte {
 		log.Printf("NETCONF_STP_HANDLER: FATAL: Failed to marshal XML: %v", err)
 		return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><rpc-reply xmlns="%s"><rpc-error><error-type>application</error-type><error-tag>internal-error</error-tag><error-severity>error</error-severity><error-message>Internal server error during XML generation</error-message></rpc-error></rpc-reply>%s`, NetconfBaseNamespaceStp, frameEnd))
 	}
-	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+	return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 }
 
 func buildErrorResponseBytesStp(msgID, errType, errTag, errMsg, frameEnd string) []byte {

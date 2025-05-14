@@ -19,11 +19,9 @@ const NetconfBaseNamespacePortConfig = "urn:ietf:params:xml:ns:netconf:base:1.0"
 // --- Common NETCONF XML Data Structures ---
 type RpcReplyPortConfig struct {
 	// Simplified for generic <ok/>, <error>, and custom GET data
-	XMLName xml.Name `xml:"rpc-reply"`
-	// MessageID removed
-	// Data field removed for custom GETs; specific data structs will be embedded or marshalled directly
-	Ok     *OkPortConfig        `xml:"ok,omitempty"`
-	Errors []RPCErrorPortConfig `xml:"rpc-error,omitempty"` // Used for edit-config errors
+	XMLName xml.Name             `xml:"rpc-reply"`
+	Result  string               `xml:"result,omitempty"`    // Changed from Ok to Result
+	Errors  []RPCErrorPortConfig `xml:"rpc-error,omitempty"` // Used for edit-config errors
 	// For custom GET responses, specific data structs will be added here if needed,
 	// or the response will be built as a raw XML string.
 }
@@ -271,7 +269,7 @@ func HandlePortConfigurationEditConfig(miyagiSocketPath string, request []byte, 
 
 	reply := RpcReplyPortConfig{
 		// MessageID removed
-		Ok: &OkPortConfig{},
+		Result: "ok",
 	}
 	return marshalToXMLPortConfig(reply, frameEnd)
 }
@@ -304,7 +302,7 @@ func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) 
 			Errors:    []RPCErrorPortConfig{{ErrorType: "application", ErrorTag: "operation-failed", ErrorSeverity: "error", ErrorMessage: errMsg}},
 		}
 		xmlBytes, _ := xml.MarshalIndent(errorReply, "", "  ")
-		return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+		return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 	}
 
 	var miyagiInterfaceMap map[string]MiyagiInterfaceDetail // From interface.go
@@ -320,7 +318,7 @@ func HandlePortConfigurationGetConfig(miyagiSocketPath, msgID, frameEnd string) 
 			Errors:    []RPCErrorPortConfig{{ErrorType: "application", ErrorTag: "operation-failed", ErrorSeverity: "error", ErrorMessage: "Failed to parse interface data from device"}},
 		}
 		xmlBytes, _ := xml.MarshalIndent(errorReply, "", "  ")
-		return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+		return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 	}
 
 	var portConfigEntries []PortConfigEntry
@@ -456,7 +454,7 @@ func HandleLagGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 		return buildErrorResponseBytesPortConfig(msgID, "application", "internal-error", "Error generating LAG XML response", frameEnd)
 	}
 	// For custom XML, we directly return the marshalled bytes with header and frameEnd
-	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+	return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 }
 
 // HandleLagEditConfig handles <edit-config> for port-channel configurations
@@ -526,7 +524,9 @@ func HandleLagEditConfig(miyagiSocketPath string, request []byte, msgID, frameEn
 		}
 	}
 
-	reply := RpcReplyPortConfig{Ok: &OkPortConfig{}} // Uses the simplified RpcReplyPortConfig
+	reply := RpcReplyPortConfig{
+		Result: "ok", // Changed from Ok to Result
+	} // Uses the simplified RpcReplyPortConfig
 	return marshalToXMLPortConfig(reply, frameEnd)
 }
 
@@ -564,7 +564,7 @@ func marshalToXMLPortConfig(data interface{}, frameEnd string) []byte {
 		return []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><rpc-reply><rpc-error><error-type>application</error-type><error-tag>internal-error</error-tag><error-severity>error</error-severity><error-message>Internal server error during XML generation</error-message></rpc-error></rpc-reply>%s`, frameEnd))
 	}
 	// If data is RpcReplyPortConfig (simplified), it won't have xmlns or message-id by default.
-	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+	return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 }
 
 func buildErrorResponseBytesPortConfig(msgID, errType, errTag, errMsg, frameEnd string) []byte {

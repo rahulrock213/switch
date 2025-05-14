@@ -30,8 +30,6 @@ type RPCErrorRoute struct {
 	ErrorMessage  string   `xml:"error-message"`
 }
 
-// --- Routing Specific XML Data Structures for <edit-config> ---
-
 // EditConfigRoutingPayload is the top-level structure for <config>
 type EditConfigRoutingPayload struct {
 	XMLName     xml.Name     `xml:"config"`

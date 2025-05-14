@@ -23,10 +23,10 @@ These examples cover common tasks such as:
 *   **`<get>`:** Retrieves operational state data and configuration data.
 *   **`<config>`:** Used within `<edit-config>` to enclose the configuration data you want to apply.
 *   **`xmlns` (XML Namespace):** An attribute used to qualify XML elements and attributes, preventing naming conflicts. Each data model (e.g., for VLANs, interfaces) will have its own namespace.
-*   **`operation` attribute:** Used within `<edit-config>` on specific data nodes to indicate the action to perform (e.g., `create`, `delete`, `merge`, `replace`).
+
 
 ---
-<br><br><br><br><br><br><br><br><br><br><br><br><br>
+
 
 ## 1. Interface Information (Custom GET)
 This section covers how to retrieve detailed information about all network interfaces on the device.
@@ -362,7 +362,7 @@ This section deals with configuring IP addresses and subnet masks on network int
 ### Get All IP Interfaces
 Retrieves the IP address configuration for all interfaces that have an IP address assigned.
 
-
+#### Request
 ```xml
 <rpc>
   <get>
@@ -372,9 +372,47 @@ Retrieves the IP address configuration for all interfaces that have an IP addres
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <ip-interfaces>
+    <1>
+      <ip4>172.16.100.163</ip4>
+      <subnet_mask>255.255.255.0</subnet_mask>
+      <type>
+        <value>2</value>
+        <description>dhcp</description>
+      </type>
+      <ifindex>100000</ifindex>
+    </1>
+    <MTPLAP_point_to_point_Port_1>
+      <ip4>203.0.113.121</ip4>
+      <subnet_mask>255.255.255.0</subnet_mask>
+      <type>
+        <value>1</value>
+        <description>static</description>
+      </type>
+      <ifindex>8000</ifindex>
+    </MTPLAP_point_to_point_Port_1>
+    <oob>
+      <ip4>192.168.254.254</ip4>
+      <subnet_mask>255.255.255.0</subnet_mask>
+      <type>
+        <value>1</value>
+        <description>static</description>
+      </type>
+      <ifindex>1080</ifindex>
+    </oob>
+  </ip-interfaces>
+</rpc-reply>
+]]>]]>
+```
+
 ### Set IP Interface
 Assigns an IP address and subnet mask to a specified interface. The `operation="create"` attribute is used here to define a new IP address configuration on the interface. If an IP configuration already exists, this might update it or add a secondary address depending on the device's behavior (often, `merge` or `replace` operations are used for updates).
 
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -392,6 +430,15 @@ Assigns an IP address and subnet mask to a specified interface. The `operation="
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ---
 
 ## 7. Port Configuration
@@ -400,7 +447,7 @@ This section covers various settings for physical switch ports, such as administ
 ### Enable/Disable Ports
 Sets the administrative status of specified ports to 'up' (enabled) or 'down' (disabled).
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -415,10 +462,19 @@ Sets the administrative status of specified ports to 'up' (enabled) or 'down' (d
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ### Set Description and Speed
 Configures the administrative status, adds a descriptive label, and sets the speed for a port.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -442,17 +498,26 @@ Configures the administrative status, adds a descriptive label, and sets the spe
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ### Configure Access VLAN
 Sets a port to 'access' mode and assigns it to a specific VLAN. Packets on an access port are untagged and belong to this single VLAN.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
     <config>
       <port-configurations xmlns="yang:set_port_config">
         <port>
-          <name>te1/0/9</name>
+          <name>te1/0/1</name>
           <switchport>
             <mode>access</mode>
             <access><vlan-id>100</vlan-id></access>
@@ -465,10 +530,19 @@ Sets a port to 'access' mode and assigns it to a specific VLAN. Packets on an ac
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ### Configure Trunk VLANs
 Sets a port to 'trunk' mode, allowing it to carry traffic for multiple VLANs. You can specify which VLANs are allowed and set a native VLAN (for untagged traffic).
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -491,10 +565,19 @@ Sets a port to 'trunk' mode, allowing it to carry traffic for multiple VLANs. Yo
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ### Enable/Disable STP on Port
 Configures Spanning Tree Protocol (STP) on a specific port. This is typically for per-port STP settings if the device supports it, distinct from global STP. (Note: This example assumes per-port STP control. Global STP is covered in the next section.)
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -511,6 +594,15 @@ Configures Spanning Tree Protocol (STP) on a specific port. This is typically fo
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ---
 
 ## 8. Spanning Tree Protocol (STP) Global
@@ -520,7 +612,7 @@ Spanning Tree Protocol prevents broadcast storms and loop issues in a switched n
 ### Get Global STP Status
 Checks if STP is globally enabled or disabled on the device.
 
-
+#### Request
 ```xml
 <rpc>
   <get>
@@ -530,10 +622,21 @@ Checks if STP is globally enabled or disabled on the device.
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <stp-global-config>
+    <enabled>true</enabled>
+  </stp-global-config>
+</rpc-reply>
+]]>]]>
+```
+
 ### Enable Global STP
 Turns on STP for the entire device.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -548,10 +651,19 @@ Turns on STP for the entire device.
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ### Disable Global STP
 Turns off STP for the entire device.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
@@ -563,5 +675,13 @@ Turns off STP for the entire device.
     </config>
   </edit-config>
 </rpc>
+]]>]]>
+```
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
 ]]>]]>
 ```
