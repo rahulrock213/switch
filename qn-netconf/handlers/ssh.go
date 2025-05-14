@@ -11,7 +11,7 @@ import (
 	"qn-netconf/miyagi" // Assuming your miyagi client is in "qn-netconf/miyagi"
 )
 
-const SshConfigNamespace = "urn:example:params:xml:ns:yang:ssh-server-config"
+const SshConfigNamespace = "urn:example:params:xml:ns:yang:ssh"
 const NetconfBaseNamespaceSSH = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures (for SSH handler) ---
@@ -21,8 +21,8 @@ type RpcReplySSH struct {
 	XMLName xml.Name `xml:"rpc-reply"`
 	// MessageID field removed to prevent its output.
 	// Data wrapper removed; SshConfig will be directly under rpc-reply.
-	SshConfig *SshServerConfigData `xml:"ssh-server-config,omitempty"`
-	Ok        *OkSSH               `xml:"ok,omitempty"`
+	SshConfig *SshServerConfigData `xml:"ssh,omitempty"`
+	Result    string               `xml:"result,omitempty"` // Changed from Ok to Result
 	Errors    []RPCErrorSSH        `xml:"rpc-error,omitempty"`
 }
 
@@ -34,25 +34,20 @@ type RPCErrorSSH struct {
 	ErrorMessage  string   `xml:"error-message"`
 }
 
-// OkSSH represents the <ok/> element.
-type OkSSH struct {
-	XMLName xml.Name `xml:"ok"`
-}
-
 // --- SSH Specific XML Data Structures ---
 
 // SshServerConfigData is used for <ssh-server-config> in <data> or <config>
 type SshServerConfigData struct {
 	// Make XMLName namespace-agnostic here to allow unmarshalling from requests
 	// that use a different namespace on the <ssh-server-config> tag (like "yang:set_ssh").
-	XMLName xml.Name `xml:"ssh-server-config"`
+	XMLName xml.Name `xml:"ssh"`               // Changed from ssh-server-config
 	Enabled *bool    `xml:"enabled,omitempty"` // Use pointer to distinguish not present vs. explicit false
 }
 
 // EditConfigSshPayload is used to parse the <config> part of an <edit-config> for SSH
 type EditConfigSshPayload struct {
 	XMLName   xml.Name             `xml:"config"`
-	SshConfig *SshServerConfigData `xml:"ssh-server-config"`
+	SshConfig *SshServerConfigData `xml:"ssh"` // Changed from ssh-server-config
 }
 
 // --- Handler Functions ---
@@ -92,7 +87,7 @@ func HandleSSHGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 	// Create the actual data structure to be marshalled
 	sshConfigPayload := SshServerConfigData{
 		// For the GET response, explicitly set the desired XMLName with namespace
-		XMLName: xml.Name{Space: "yang:ssh", Local: "ssh-server-config"},
+		XMLName: xml.Name{Space: "yang:get_ssh", Local: "ssh"}, // Align with filter namespace
 		Enabled: &sshEnabled,
 	}
 
@@ -105,31 +100,40 @@ func HandleSSHGetConfig(miyagiSocketPath, msgID, frameEnd string) []byte {
 
 // HandleSSHEditConfig handles <edit-config> for SSH enable/disable
 func HandleSSHEditConfig(miyagiSocketPath string, request []byte, msgID, frameEnd string) []byte {
-	var editReq EditConfigSshPayload
-	// We need to unmarshal from the <config> element.
-	// A simple way is to find the <config> part of the request.
-	configStartIndex := bytes.Index(request, []byte("<config>"))
-	configEndIndex := bytes.LastIndex(request, []byte("</config>"))
+	// Modified to parse <ssh> directly from <edit-config>, bypassing the <config> wrapper.
+	// Client should send <edit-config><ssh>...</ssh></edit-config>
 
-	if configStartIndex == -1 || configEndIndex == -1 || configStartIndex >= configEndIndex {
-		log.Printf("NETCONF_SSH_HANDLER: Malformed <edit-config> request, <config> tag not found or invalid: %s", string(request))
+	sshTagStartBytes := []byte("<ssh") // Accommodate attributes like xmlns
+	sshTagEndBytes := []byte("</ssh>")
+
+	sshStartIdx := bytes.Index(request, sshTagStartBytes)
+	if sshStartIdx == -1 {
+		log.Printf("NETCONF_SSH_HANDLER: <ssh> tag not found in request for msgID %s.", msgID)
 		return buildErrorResponseBytesSSH(msgID, "protocol", "malformed-message", "Malformed <edit-config> request", frameEnd)
 	}
-	configPayload := request[configStartIndex : configEndIndex+len("</config>")]
 
-	log.Printf("NETCONF_SSH_HANDLER: DEBUG: Attempting to unmarshal configPayload: %s", string(configPayload))
-	if err := xml.Unmarshal(configPayload, &editReq); err != nil {
-		log.Printf("NETCONF_SSH_HANDLER: Error unmarshalling SSH <edit-config> payload: %v. Payload: %s", err, string(configPayload))
+	sshEndIdx := bytes.Index(request[sshStartIdx:], sshTagEndBytes)
+	if sshEndIdx == -1 {
+		log.Printf("NETCONF_SSH_HANDLER: Closing </ssh> tag not found for msgID %s.", msgID)
+		return buildErrorResponseBytesSSH(msgID, "protocol", "malformed-message", "Malformed <ssh> element in edit-config", frameEnd)
+	}
+	sshEndIdx += sshStartIdx // Adjust to be relative to the original request
+
+	sshContent := request[sshStartIdx : sshEndIdx+len(sshTagEndBytes)]
+
+	var sshData SshServerConfigData // Unmarshal directly into SshServerConfigData
+	if err := xml.Unmarshal(sshContent, &sshData); err != nil {
+		log.Printf("NETCONF_SSH_HANDLER: Error unmarshalling SSH <edit-config> payload: %v. Payload: %s", err, string(sshContent))
 		return buildErrorResponseBytesSSH(msgID, "protocol", "malformed-message", "Invalid SSH configuration format", frameEnd)
 	}
 
-	if editReq.SshConfig == nil || editReq.SshConfig.Enabled == nil {
-		log.Printf("NETCONF_SSH_HANDLER: Malformed SSH <edit-config>, <ssh-server-config><enabled> missing.")
-		return buildErrorResponseBytesSSH(msgID, "protocol", "missing-element", "<ssh-server-config><enabled> is required", frameEnd)
+	if sshData.Enabled == nil {
+		log.Printf("NETCONF_SSH_HANDLER: Malformed SSH <edit-config>, <ssh><enabled> missing.")
+		return buildErrorResponseBytesSSH(msgID, "protocol", "missing-element", "<ssh><enabled> is required", frameEnd)
 	}
 
 	var miyagiUID string
-	if *editReq.SshConfig.Enabled {
+	if *sshData.Enabled {
 		miyagiUID = "Agent.Switch.Set.SSH.Enable"
 	} else {
 		miyagiUID = "Agent.Switch.Set.SSH.Disable"
@@ -155,8 +159,7 @@ func HandleSSHEditConfig(miyagiSocketPath string, request []byte, msgID, frameEn
 
 	// If Miyagi call is successful
 	reply := RpcReplySSH{
-		// MessageID is no longer part of RpcReplySSH
-		Ok: &OkSSH{},
+		Result: "ok", // Populate Result field
 	}
 	return marshalToXMLSSH(reply, frameEnd)
 }
@@ -173,7 +176,8 @@ func marshalToXMLSSH(data interface{}, frameEnd string) []byte {
 			NetconfBaseNamespaceSSH, frameEnd,
 		))
 	}
-	return append([]byte(xml.Header), append(xmlBytes, []byte(frameEnd)...)...)
+	// Prepend XML declaration, add a newline before frameEnd
+	return append([]byte(xml.Header), append(append(xmlBytes, '\n'), []byte(frameEnd)...)...)
 }
 
 func buildErrorResponseBytesSSH(msgID, errType, errTag, errMsg, frameEnd string) []byte {

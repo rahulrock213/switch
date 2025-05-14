@@ -92,16 +92,20 @@ Creates a new VLAN or modifies an existing one.
 ```xml
 <rpc>
   <edit-config>
+    <config>
       <vlans xmlns="yang:set_vlan">
         <vlan>  
           <id>100</id>
           <name>vlan_100</name>
         </vlan> 
       </vlans>
+    </config>
   </edit-config>
 </rpc>
 ]]>]]>
 ```
+
+
 #### Response
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -114,53 +118,83 @@ Creates a new VLAN or modifies an existing one.
 
 ## 3. SSH Server Configuration
 Secure Shell (SSH) provides secure remote access to the device.
-The response for GET operations will be an `<rpc-reply>` with the `<ssh-server-config>` data directly under it, using `xmlns="yang:ssh"`.
+The response for GET operations will be an `<rpc-reply>` with the `<ssh>` data directly under it, using `xmlns="yang:ssh"`.
 The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 
 ### Get SSH Status
 Checks if the SSH server is currently enabled or disabled.
 
-
+#### Request
 ```xml
 <rpc>
   <get>
-    <ssh-server-config xmlns="yang:get_ssh"/>
+    <ssh xmlns="yang:get_ssh"/>
   </get>
 </rpc>
+]]>]]>
+```
+
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <ssh>
+    <enabled>true</enabled>
+  </ssh>
+</rpc-reply>
 ]]>]]>
 ```
 
 ### Enable SSH
 Turns on the SSH server.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
     <config>
-      <ssh-server-config xmlns="yang:set_ssh">
+      <ssh xmlns="yang:set_ssh">
         <enabled>true</enabled>
-      </ssh-server-config>
+      </ssh>
     </config>
   </edit-config>
 </rpc>
 ]]>]]>
 ```
 
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
+]]>]]>
+```
+
 ### Disable SSH
 Turns off the SSH server.
 
-
+#### Request
 ```xml
 <rpc>
   <edit-config>
     <config>
-      <ssh-server-config xmlns="yang:set_ssh">
+      <ssh xmlns="yang:set_ssh">
         <enabled>false</enabled>
-      </ssh-server-config>
+      </ssh>
     </config>
   </edit-config>
 </rpc>
+]]>]]>
+```
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <result>ok</result>
+</rpc-reply>
 ]]>]]>
 ```
 
