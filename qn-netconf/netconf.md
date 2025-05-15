@@ -340,9 +340,9 @@ Parameters:
       <routing xmlns="yang:set_route">
         <static-routes>
           <route operation="create">
-            <prefix>131.108.1.27</prefix>
+            <prefix>1131.108.5.0</prefix>
             <mask>255.255.255.255</mask>
-            <next-hop>131.108.1.28</next-hop>
+            <next-hop>131.108.1.12</next-hop>
           </route>
         </static-routes>
       </routing>
@@ -379,7 +379,7 @@ Parameters:
       <routing xmlns="yang:set_route">
         <static-routes>
           <route operation="delete">
-            <prefix>131.108.1.27</prefix>
+            <prefix>131.108.5.0</prefix>
             <mask>255.255.255.255</mask>
           </route>
         </static-routes>
@@ -505,35 +505,18 @@ Parameters:
 ## 6. Port Configuration
 This section covers various settings for physical switch ports, such as administrative status, speed, description, and VLAN membership modes (access/trunk).
 
-### Enable/Disable Ports
-Sets the administrative status of specified ports to 'up' (enabled) or 'down' (disabled).
-
-#### Request
-```xml
-<rpc>
-  <edit-config>
-    <config>
-      <port-configurations xmlns="yang:set_port_config">
-        <port><name>te1/0/1</name><admin-status>up</admin-status></port>
-        <port><name>te1/0/2</name><admin-status>up</admin-status></port>
-      </port-configurations>
-    </config>
-  </edit-config>
-</rpc>
-]]>]]>
-```
-
-#### Response
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<rpc-reply>
-  <result>ok</result>
-</rpc-reply>
-]]>]]>
-```
-
-### Set Description and Speed
+### Enable/Disable Ports, Set Description and Speed Ports
+Turns up/down a set port that has been turned off (does nothing if the port isn't in use).
 Configures the administrative status, adds a descriptive label, and sets the speed for a port.
+
+Parameters:
+
+| Name | Value Type | Requirement | Description |
+| ---- | ---------- | ----------- | ----------- |
+| `name` | String | mandatory | The port name, valid values are: gi1/0/1 - gi1/0/48 for Ethernet, te1/0/1 - te1/0/4 for SFP, Po1 - Po32 for port channel. |
+| `admin-status` | String | optional | The admin-status, valid values are: up or down|
+| `description` | String | optional | Specifies a comment or a description of the port to assist the user. |
+| `speed` | Integer | optional | The set speed, valid values are: 10, 100, 1000, 10000. |
 
 #### Request
 ```xml
@@ -543,14 +526,13 @@ Configures the administrative status, adds a descriptive label, and sets the spe
       <port-configurations xmlns="yang:set_port_config">
         <port>
           <name>te1/0/1</name>
-          <admin-status>up</admin-status>
+          <admin-status>down</admin-status>
           <description>PC</description>
           <speed>10000</speed>
         </port>
         <port>
           <name>te1/0/2</name>
-          <admin-status>up</admin-status>
-          <description>Core_Switch</description>
+          <description>Co_Switch</description>
         </port>
       </port-configurations>
     </config>
@@ -569,7 +551,14 @@ Configures the administrative status, adds a descriptive label, and sets the spe
 ```
 
 ### Configure Access VLAN
-Sets a port to 'access' mode and assigns it to a specific VLAN. Packets on an access port are untagged and belong to this single VLAN.
+A port in access mode can be an untagged member of maximally a single VLAN.
+
+Parameters:
+
+| Name | Value Type | Requirement | Description |
+| ---- | ---------- | ----------- | ----------- |
+| `name` | String | mandatory | Ports are: gi1/0/1, gi1/0/2, ..., gi1/0/48, te1/0/1, te1/0/2, te1/0/3, te1/0/4, Po1, Po2, ..., Po32. |
+| `vlan-id` | String | mandatory | Specifies the VLAN to which the port is configured. Set this argument to "none" to specify that the access port cannot belong to any VLAN. |
 
 #### Request
 ```xml
@@ -578,7 +567,7 @@ Sets a port to 'access' mode and assigns it to a specific VLAN. Packets on an ac
     <config>
       <port-configurations xmlns="yang:set_port_config">
         <port>
-          <name>te1/0/1</name>
+          <name>te1/0/6</name>
           <switchport>
             <mode>access</mode>
             <access><vlan-id>100</vlan-id></access>
@@ -601,7 +590,14 @@ Sets a port to 'access' mode and assigns it to a specific VLAN. Packets on an ac
 ```
 
 ### Configure Trunk VLANs
-Sets a port to 'trunk' mode, allowing it to carry traffic for multiple VLANs. You can specify which VLANs are allowed and set a native VLAN (for untagged traffic).
+Configure the VLAN membership mode.
+
+Parameters:
+
+| Name | Value Type | Requirement | Description |
+| ---- | ---------- | ----------- | ----------- |
+| `name` | String | mandatory | Specify the interface name (One of: gi1/0/1, gi1/0/2, ..., gi1/0/48, te1/0/1, te1/0/2, te1/0/3, te1/0/4) or range of interfaces with range interface_name. See examples. |
+| `mode` | String | mandatory | The argument can take one of the following values: access: Specifies an untagged layer 2 VLAN port; trunk: Specifies a trunking layer 2 VLAN port; general: Specifies a full 802-1q-supported VLAN port; private-vlan promiscuous: Private-VLAN promiscuous port; private-vlan host: Private-VLAN host port; customer: Specifies that an edge port connected to customer equipment. Traffic received from this port will be tunneled with the additional 802.1q. VLAN tag(Q-in-Q VLANtunneling). |
 
 #### Request
 ```xml
@@ -610,13 +606,9 @@ Sets a port to 'trunk' mode, allowing it to carry traffic for multiple VLANs. Yo
     <config>
       <port-configurations xmlns="yang:set_port_config">
         <port>
-          <name>te1/0/5</name>
+          <name>te1/0/10</name>
           <switchport>
             <mode>trunk</mode>
-            <trunk>
-              <allowed-vlans>10,20,30-35,40</allowed-vlans>
-              <native-vlan-id>1</native-vlan-id>
-            </trunk>
           </switchport>
         </port>
       </port-configurations>
@@ -671,8 +663,13 @@ Spanning Tree Protocol prevents broadcast storms and loop issues in a switched n
 
 
 ### Get Global STP Status
-Checks if STP is globally enabled or disabled on the device.
+Checks if STP is globally enabled or disabled on the device.(true - enable, false - disable)
 
+Parameters:
+
+```
+null
+```
 #### Request
 ```xml
 <rpc>
@@ -695,7 +692,13 @@ Checks if STP is globally enabled or disabled on the device.
 ```
 
 ### Enable Global STP
-Turns on STP for the entire device.
+Enable spanning tree functionality.
+
+Parameters:
+
+```
+null
+```
 
 #### Request
 ```xml
@@ -722,7 +725,13 @@ Turns on STP for the entire device.
 ```
 
 ### Disable Global STP
-Turns off STP for the entire device.
+Disable spanning tree functionality.
+
+Parameters:
+
+```
+null
+```
 
 #### Request
 ```xml
@@ -750,7 +759,13 @@ Turns off STP for the entire device.
 
 ## 8. Get Port Status
 
-To retrieve the operational status of a specific port by its interface number.
+The desired state of the interface (1 = UP, 2 = DOWN, 3 = TESTING).
+
+Parameters:
+
+| Name | Value Type | Description |
+| ---- | ---------- | ----------- |
+| `interface-number` | Integer | Interface number. |
 
 #### Request
 ```xml
@@ -785,7 +800,13 @@ To retrieve the operational status of a specific port by its interface number.
 
 ## 9. Get Port Description
 
-To retrieve the configured description of a specific port by its interface number.
+Get interface description.
+
+Parameters:
+
+| Name | Value Type | Description |
+| ---- | ---------- | ----------- |
+| `interface-number` | Integer | Interface number. |
 
 #### Request
 ```xml
@@ -817,7 +838,13 @@ To retrieve the configured description of a specific port by its interface numbe
 
 ## 11. Get Port Speed
 
-To retrieve the operational speed of a specific port by its interface number.
+An estimate of the interface's current bandwidth in bits per second.
+
+Parameters:
+
+| Name | Value Type | Description |
+| ---- | ---------- | ----------- |
+| `interface-number` | Integer | Interface number. |
 
 #### Request
 ```xml
