@@ -11,7 +11,7 @@ import (
 	"qn-netconf/miyagi" // Assuming your miyagi client is in "qn-netconf/miyagi"
 )
 
-const TelnetConfigNamespace = "urn:example:params:xml:ns:yang:telnet"
+const TelnetConfigNamespace = "yang:telnet"
 const NetconfBaseNamespaceTelnet = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures (for Telnet handler) ---

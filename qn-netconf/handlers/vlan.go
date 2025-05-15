@@ -16,7 +16,7 @@ import (
 
 // VlanNamespace is the XML namespace for VLAN configuration.
 // Changed to align with the namespace observed in the client's <get> filter.
-const VlanNamespace = "yang:get_vlan"
+const VlanNamespace = "yang:vlan"
 const NetconfBaseNamespace = "yang:vlan"
 
 // --- XML Data Structures ---

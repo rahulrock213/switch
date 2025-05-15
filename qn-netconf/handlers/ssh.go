@@ -11,7 +11,7 @@ import (
 	"qn-netconf/miyagi" // Assuming your miyagi client is in "qn-netconf/miyagi"
 )
 
-const SshConfigNamespace = "urn:example:params:xml:ns:yang:ssh"
+const SshConfigNamespace = "yang:ssh"
 const NetconfBaseNamespaceSSH = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures (for SSH handler) ---

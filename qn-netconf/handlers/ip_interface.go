@@ -12,7 +12,7 @@ import (
 	"qn-netconf/miyagi"
 )
 
-const IpInterfaceNamespace = "urn:example:params:xml:ns:yang:ip-interface"
+const IpInterfaceNamespace = "yang:ip-interface"
 const NetconfBaseNamespaceIpInterface = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures ---

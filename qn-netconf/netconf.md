@@ -751,3 +751,35 @@ To retrieve the configured description of a specific port by its interface numbe
 </rpc-reply>
 ]]>]]>
 ```
+
+---
+
+## 11. Get Port Speed
+
+To retrieve the operational speed of a specific port by its interface number.
+
+#### Request
+```xml
+<rpc>
+  <get>
+    <port-speed xmlns="yang:get_port_speed">
+      <interface-number>1</interface-number>
+    </port-speed>
+  </get>
+</rpc>
+]]>]]>
+```
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <data>
+    <port-speed xmlns="yang:get_port_speed">
+      <interface-number>1</interface-number>
+      <speed>10000</speed>
+    </port-speed>
+  </data>
+</rpc-reply>
+]]>]]>
+```

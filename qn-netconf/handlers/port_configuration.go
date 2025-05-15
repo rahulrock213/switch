@@ -13,7 +13,7 @@ import (
 	"qn-netconf/miyagi"
 )
 
-const PortConfigNamespace = "urn:example:params:xml:ns:yang:port-config"
+const PortConfigNamespace = "yang:port-config"
 const NetconfBaseNamespacePortConfig = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures ---

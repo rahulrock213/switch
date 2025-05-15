@@ -11,7 +11,7 @@ import (
 	"qn-netconf/miyagi"
 )
 
-const StpGlobalConfigNamespace = "urn:example:params:xml:ns:yang:stp-global-config"
+const StpGlobalConfigNamespace = "yang:stp-global-config"
 const NetconfBaseNamespaceStp = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures ---

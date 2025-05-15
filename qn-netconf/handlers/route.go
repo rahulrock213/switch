@@ -11,7 +11,7 @@ import (
 	"qn-netconf/miyagi"
 )
 
-const RoutingNamespace = "urn:example:params:xml:ns:yang:routing"
+const RoutingNamespace = "yang:routing"
 const NetconfBaseNamespaceRoute = "urn:ietf:params:xml:ns:netconf:base:1.0"
 
 // --- Common NETCONF XML Data Structures (for Route handler) ---
