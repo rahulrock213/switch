@@ -25,7 +25,7 @@ type Config struct {
 // LoadConfig provides a static configuration.
 func LoadConfig() (*Config, error) {
 	cfg := Config{
-		SSHPort:           8300,
+		SSHPort:           830,
 		ServerBanner:      "SSH-2.0-My NETCONF Server v0.1",
 		FrameEnd:          "]]>]]>",
 		ConnectionTimeout: 120 * time.Second, // Directly use time.Duration

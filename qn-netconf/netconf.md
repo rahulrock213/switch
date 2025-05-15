@@ -1,52 +1,42 @@
 # NETCONF Usage Guide 
 
 ## APIs
-- Interface
 - VLAN
-- SSH/Telnet
+- SSH
+- TELNET
 - Routing
 - IP Interface
 - Port Configuration
 - STP Global
-- STP Per-Port
-
-
-This guide provides practical NETCONF XML examples to help you manage and configure your network device. NETCONF (Network Configuration Protocol) is a standardized protocol for managing network devices, using XML-based data encoding for configuration and operational data.
-
-These examples cover common tasks such as:
-*   Retrieving current configurations and operational state using simplified RPCs.
-*   Modifying device settings for interfaces, VLANs, remote access (SSH/Telnet), IP routing, IP addressing, port-specific features, Port Channels (LAGs), and Spanning Tree Protocol (STP) using simplified RPCs.
-
-**Key NETCONF Concepts Used in This Guide:**
-
-*   **`<rpc>`:** The root element for every NETCONF request. For the simplified RPCs shown, `message-id` and the base NETCONF namespace on the `<rpc>` tag are often omitted for brevity, though standard clients might still send them. The server will internally track message IDs.
-*   **`<get>`:** Retrieves operational state data and configuration data.
-*   **`<config>`:** Used within `<edit-config>` to enclose the configuration data you want to apply.
-*   **`xmlns` (XML Namespace):** An attribute used to qualify XML elements and attributes, preventing naming conflicts. Each data model (e.g., for VLANs, interfaces) will have its own namespace.
-
-
+- Get Port Status
+- Get Port Description
+- Get Port Speed
 ---
 
+## Logging into NETCONF Client via SSH
 
-## 1. Interface Information (Custom GET)
-This section covers how to retrieve detailed information about all network interfaces on the device.
-The response format for this specific `<get>` operation is a custom XML structure, where interface data is directly under an `<rpc-reply>` root element, with each interface name as a dynamic tag.
+To start a NETCONF session over SSH from a Linux system, use the following command:
 
-### Get Interface Information
-Retrieves operational status and configuration for all interfaces.
-
-```xml
-<rpc>
-  <get>
-    <interfaces xmlns="yang:get_interface"/>
-  </get>
-</rpc>
-]]>]]>
+```bash
+ssh -p 830 <username>@<device_ip> -s netconf
 ```
 
+**Example:**
+
+```bash
+ssh -p 830 admin@192.168.1.1 -s netconf
+```
+
+This command:
+
+* Connects to the network device using SSH.
+* Initiates a NETCONF session (`-s netconf` is required to switch into NETCONF subsystem).
+
+Ensure the target device has NETCONF enabled and listens on port 830 (default for NETCONF over SSH).
+
 ---
 
-## 2. VLAN Configuration
+## 1. VLAN Configuration
 Virtual Local Area Networks (VLANs) allow you to segment your network. This section shows how to view and manage VLANs.
 The response for GET operations will be an `<rpc-reply>` with a `<data>` wrapper, and the `<vlans>` element within will use `xmlns="yang:vlan"`.
 The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
@@ -57,7 +47,7 @@ Retrieves a list of all configured VLANs and their names. The response format fo
 ```xml
 <rpc>
   <get>
-    <vlans xmlns="yang:get_vlan"/>
+    <vlans xmlns="yang:vlan"/>
   </get>
 </rpc>
 ]]>]]>
@@ -116,7 +106,7 @@ Creates a new VLAN or modifies an existing one.
 ```
 ---
 
-## 3. SSH Server Configuration
+## 2. SSH Server Configuration
 Secure Shell (SSH) provides secure remote access to the device.
 The response for GET operations will be an `<rpc-reply>` with the `<ssh>` data directly under it, using `xmlns="yang:ssh"`.
 The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
@@ -200,7 +190,7 @@ Turns off the SSH server.
 
 ---
 
-## 4. Telnet Server Configuration
+## 3. Telnet Server Configuration
 Telnet provides remote access, but it's less secure than SSH as data is sent in clear text.
 The response for GET operations will be an `<rpc-reply>` with the `<telnet-server-config>` data directly under it, using `xmlns="yang:telnet"`.
 The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
@@ -284,7 +274,7 @@ Turns off the Telnet server.
 
 ---
 
-## 5. Static Routing
+## 4. Static Routing
 Static routes manually define paths for IP traffic.
 The response for GET operations will be an `<rpc-reply>` with the `<routing>` data directly under it, using `xmlns="yang:route"`.
 The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
@@ -355,7 +345,7 @@ Removes an existing static IP route. The `operation="delete"` attribute specifie
 
 ---
 
-## 6. IP Interface
+## 5. IP Interface
 This section deals with configuring IP addresses and subnet masks on network interfaces.
 
 
@@ -441,7 +431,7 @@ Assigns an IP address and subnet mask to a specified interface. The `operation="
 
 ---
 
-## 7. Port Configuration
+## 6. Port Configuration
 This section covers various settings for physical switch ports, such as administrative status, speed, description, and VLAN membership modes (access/trunk).
 
 ### Enable/Disable Ports
@@ -605,7 +595,7 @@ Configures Spanning Tree Protocol (STP) on a specific port. This is typically fo
 
 ---
 
-## 8. Spanning Tree Protocol (STP) Global
+## 7. Spanning Tree Protocol (STP) Global
 Spanning Tree Protocol prevents broadcast storms and loop issues in a switched network. This section covers global STP settings.
 
 
@@ -687,7 +677,7 @@ Turns off STP for the entire device.
 ```
 ---
 
-## 9. Get Port Status
+## 8. Get Port Status
 
 To retrieve the operational status of a specific port by its interface number.
 
@@ -722,7 +712,7 @@ To retrieve the operational status of a specific port by its interface number.
 
 ---
 
-## 10. Get Port Description
+## 9. Get Port Description
 
 To retrieve the configured description of a specific port by its interface number.
 
