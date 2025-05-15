@@ -370,7 +370,6 @@ Parameters:
 | ---- | ---------- | ----------- | ----------- |
 | `prefix` | String | mandatory | The IP route prefix for the destination. |
 | `mask` | String | mandatory | The mask for the destination. |
-| `next_hop` | String | mandatory | IP address of the next hop that can be used to reach the network. |
 
 #### Request
 ```xml
@@ -408,6 +407,12 @@ This section deals with configuring IP addresses and subnet masks on network int
 
 ### Get All IP Interfaces
 Retrieves the IP address configuration for all interfaces that have an IP address assigned.
+
+Parameters:
+
+```
+null
+```
 
 #### Request
 ```xml
@@ -457,7 +462,16 @@ Retrieves the IP address configuration for all interfaces that have an IP addres
 ```
 
 ### Set IP Interface
-Assigns an IP address and subnet mask to a specified interface. The `operation="create"` attribute is used here to define a new IP address configuration on the interface. If an IP configuration already exists, this might update it or add a secondary address depending on the device's behavior (often, `merge` or `replace` operations are used for updates).
+
+Define an ip address for an interface.
+
+Parameters:
+
+| Name | Value Type | Requirement | Description |
+| ---- | ---------- | ----------- | ----------- |
+| `interface_name` | String | mandatory | Interfaces are: gi1/0/1, gi1/0/2, ..., gi1/0/48, te1/0/1, te1/0/2, te1/0/3, te1/0/4. |
+| `ip_address` | String | mandatory | Specifies the IP address. |
+| `mask_prefix` | String | mandatory | Network mask of the IP address or prefix length: The number of bits that comprise the IP address prefix. |
 
 #### Request
 ```xml
