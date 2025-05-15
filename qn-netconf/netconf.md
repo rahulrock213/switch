@@ -469,7 +469,7 @@ Parameters:
 
 | Name | Value Type | Requirement | Description |
 | ---- | ---------- | ----------- | ----------- |
-| `interface_name` | String | mandatory | Interfaces are: gi1/0/1, gi1/0/2, ..., gi1/0/48, te1/0/1, te1/0/2, te1/0/3, te1/0/4. |
+| `name` | String | mandatory | Interfaces are: gi1/0/1, gi1/0/2, ..., gi1/0/48, te1/0/1, te1/0/2, te1/0/3, te1/0/4. |
 | `ip_address` | String | mandatory | Specifies the IP address. |
 | `mask_prefix` | String | mandatory | Network mask of the IP address or prefix length: The number of bits that comprise the IP address prefix. |
 
@@ -514,7 +514,7 @@ Parameters:
 | Name | Value Type | Requirement | Description |
 | ---- | ---------- | ----------- | ----------- |
 | `name` | String | mandatory | The port name, valid values are: gi1/0/1 - gi1/0/48 for Ethernet, te1/0/1 - te1/0/4 for SFP, Po1 - Po32 for port channel. |
-| `admin-status` | String | optional | The admin-status, valid values are: up or down|
+| `admin_status` | String | optional | The admin-status, valid values are: up or down|
 | `description` | String | optional | Specifies a comment or a description of the port to assist the user. |
 | `speed` | Integer | optional | The set speed, valid values are: 10, 100, 1000, 10000. |
 
@@ -558,7 +558,7 @@ Parameters:
 | Name | Value Type | Requirement | Description |
 | ---- | ---------- | ----------- | ----------- |
 | `name` | String | mandatory | Ports are: gi1/0/1, gi1/0/2, ..., gi1/0/48, te1/0/1, te1/0/2, te1/0/3, te1/0/4, Po1, Po2, ..., Po32. |
-| `vlan-id` | String | mandatory | Specifies the VLAN to which the port is configured. Set this argument to "none" to specify that the access port cannot belong to any VLAN. |
+| `vlan_id` | String | mandatory | Specifies the VLAN to which the port is configured. Set this argument to "none" to specify that the access port cannot belong to any VLAN. |
 
 #### Request
 ```xml
