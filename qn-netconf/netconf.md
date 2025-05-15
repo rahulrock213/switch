@@ -627,35 +627,6 @@ Parameters:
 ]]>]]>
 ```
 
-### Enable/Disable STP on Port
-Configures Spanning Tree Protocol (STP) on a specific port. This is typically for per-port STP settings if the device supports it, distinct from global STP. (Note: This example assumes per-port STP control. Global STP is covered in the next section.)
-
-#### Request
-```xml
-<rpc>
-  <edit-config>
-    <config>
-      <port-configurations xmlns="yang:set_port_config">
-        <port>
-          <name>te1/0/6</name>
-          <stp><enabled>true</enabled></stp>
-        </port>
-      </port-configurations>
-    </config>
-  </edit-config>
-</rpc>
-]]>]]>
-```
-
-#### Response
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<rpc-reply>
-  <result>ok</result>
-</rpc-reply>
-]]>]]>
-```
-
 ---
 
 ## 7. Spanning Tree Protocol (STP) Global
