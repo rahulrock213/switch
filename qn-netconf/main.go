@@ -281,6 +281,8 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>%s</capability> <!-- IP Interface Capability -->
     <capability>%s</capability> <!-- Port Configuration Capability -->
     <capability>%s</capability> <!-- STP Global Configuration Capability -->
+    <capability>%s</capability> <!-- Port Status Capability -->
+    <capability>%s</capability> <!-- Port Description Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
@@ -288,11 +290,10 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
 	// Added handlers.StpGlobalConfigNamespace to advertise STP Global Configuration capability
 
 	if _, err := channel.Write([]byte(serverHello)); err != nil {
-		return fmt.Errorf("failed to send server hello: %w", err)
+		return fmt.Errorf("failed to send server hello: %w", err) // Corrected format specifier count
 	}
 
-	// Read what is presumably the client's hello message.
-	// For manual testing, if the client sends an RPC directly, we'll try to process it.
+	// Read client's hello message.
 	clientHello, err := readFrame(channel)
 	if err != nil {
 		return fmt.Errorf("error reading client hello: %w", err)
@@ -410,6 +411,16 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<stp-global-config xmlns=\"%s\"", handlers.StpGlobalConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleStpGetConfig for <get> with original STP Global filter. Message ID: %s", msgID)
 			return handlers.HandleStpGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Port Status checks for <get>
+		} else if bytes.Contains(request, []byte("<port-status")) &&
+			(bytes.Contains(request, []byte(fmt.Sprintf("xmlns=\"%s\"", handlers.PortStatusNamespace))) || bytes.Contains(request, []byte(fmt.Sprintf("xmlns='%s'", handlers.PortStatusNamespace)))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleGetPortStatus for <get> with Port Status filter. Message ID: %s", msgID)
+			return handlers.HandleGetPortStatus(appConfig.MiyagiSocketPath, request, msgID, appConfig.FrameEnd)
+			// Port Description checks for <get>
+		} else if bytes.Contains(request, []byte("<port-description")) &&
+			(bytes.Contains(request, []byte(fmt.Sprintf("xmlns=\"%s\"", handlers.PortDescriptionNamespace))) || bytes.Contains(request, []byte(fmt.Sprintf("xmlns='%s'", handlers.PortDescriptionNamespace)))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleGetPortDescription for <get> with Port Description filter. Message ID: %s", msgID)
+			return handlers.HandleGetPortDescription(appConfig.MiyagiSocketPath, request, msgID, appConfig.FrameEnd)
 
 		}
 		// If it's a <get> but not for VLANs as per the filter above, it's unhandled by this specific logic.
@@ -485,6 +496,16 @@ func generateResponse(request []byte) []byte {
 		} else if bytes.Contains(request, []byte(fmt.Sprintf("<stp-global-config xmlns=\"%s\"", handlers.StpGlobalConfigNamespace))) {
 			log.Printf("NETCONF_SERVER: Dispatching to HandleStpGetConfig for <get-config> with original STP Global filter. Message ID: %s", msgID)
 			return handlers.HandleStpGetConfig(appConfig.MiyagiSocketPath, msgID, appConfig.FrameEnd)
+			// Port Status checks for <get-config>
+		} else if bytes.Contains(request, []byte("<port-status")) &&
+			(bytes.Contains(request, []byte(fmt.Sprintf("xmlns=\"%s\"", handlers.PortStatusNamespace))) || bytes.Contains(request, []byte(fmt.Sprintf("xmlns='%s'", handlers.PortStatusNamespace)))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleGetPortStatus for <get-config> with Port Status filter. Message ID: %s", msgID)
+			return handlers.HandleGetPortStatus(appConfig.MiyagiSocketPath, request, msgID, appConfig.FrameEnd)
+			// Port Description checks for <get-config>
+		} else if bytes.Contains(request, []byte("<port-description")) &&
+			(bytes.Contains(request, []byte(fmt.Sprintf("xmlns=\"%s\"", handlers.PortDescriptionNamespace))) || bytes.Contains(request, []byte(fmt.Sprintf("xmlns='%s'", handlers.PortDescriptionNamespace)))) {
+			log.Printf("NETCONF_SERVER: Dispatching to HandleGetPortDescription for <get-config> with Port Description filter. Message ID: %s", msgID)
+			return handlers.HandleGetPortDescription(appConfig.MiyagiSocketPath, request, msgID, appConfig.FrameEnd)
 		}
 		log.Printf("NETCONF_SERVER: Received <get-config> operation with an unhandled filter. Message ID: %s. Request: %s", msgID, string(request))
 		return buildErrorResponse(appConfig.FrameEnd, msgID, "operation-not-supported", "The <get-config> operation with the specified filter is not supported.")

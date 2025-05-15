@@ -685,3 +685,69 @@ Turns off STP for the entire device.
 </rpc-reply>
 ]]>]]>
 ```
+---
+
+## 9. Get Port Status
+
+To retrieve the operational status of a specific port by its interface number.
+
+#### Request
+```xml
+<rpc>
+  <get>
+      <port-status xmlns="yang:get_port_status">
+        <interface-number>1</interface-number>
+      </port-status>
+  </get>
+</rpc>
+]]>]]>
+```
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <data>
+    <port-status xmlns="yang:get_port_status">
+      <interface-number>1</interface-number>
+      <status>
+        <value>1</value>
+        <description>UP</description>
+      </status>
+    </port-status>
+  </data>
+</rpc-reply>
+]]>]]>
+```
+
+---
+
+## 10. Get Port Description
+
+To retrieve the configured description of a specific port by its interface number.
+
+#### Request
+```xml
+<rpc>
+  <get>
+    <port-description xmlns="yang:get_port_description">
+      <interface-number>1</interface-number>
+    </port-description>
+  </get>
+</rpc>
+]]>]]>
+```
+
+#### Response
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rpc-reply>
+  <data>
+    <port-description xmlns="yang:get_port_description">
+      <interface-number>1</interface-number>
+      <description>PC</description>
+    </port-description>
+  </data>
+</rpc-reply>
+]]>]]>
+```
