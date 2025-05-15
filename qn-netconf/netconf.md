@@ -38,11 +38,16 @@ Ensure the target device has NETCONF enabled and listens on port 830 (default fo
 
 ## 1. VLAN Configuration
 Virtual Local Area Networks (VLANs) allow you to segment your network. This section shows how to view and manage VLANs.
-The response for GET operations will be an `<rpc-reply>` with a `<data>` wrapper, and the `<vlans>` element within will use `xmlns="yang:vlan"`.
-The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
+
 ### Get VLANs
-Retrieves a list of all configured VLANs and their names. The response format for this specific `<get>` operation is a custom XML structure, where VLAN data is directly under a `<vlans>` element.
- 
+Retrieves a list of all configured VLANs and their names. 
+
+Parameters:
+
+```
+null
+```
+
 #### Request
 ```xml
 <rpc>
@@ -78,6 +83,13 @@ Retrieves a list of all configured VLANs and their names. The response format fo
 ### Set VLAN
 Creates a new VLAN or modifies an existing one.
 
+Parameters:
+
+| Name | Value Type | Requirement | Description |
+| ---- | ---------- | ----------- | ----------- |
+| `id` | Integer | mandatory | The id of the vlan. |
+| `name` | String | optional | The name of the vlan (if not entered, id will be used as name). |
+
 #### Request
 ```xml
 <rpc>
@@ -108,11 +120,15 @@ Creates a new VLAN or modifies an existing one.
 
 ## 2. SSH Server Configuration
 Secure Shell (SSH) provides secure remote access to the device.
-The response for GET operations will be an `<rpc-reply>` with the `<ssh>` data directly under it, using `xmlns="yang:ssh"`.
-The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
 
 ### Get SSH Status
-Checks if the SSH server is currently enabled or disabled.
+Checks if the SSH server is currently enabled or disabled. (true - enable, false - disable)
+
+Parameters:
+
+```
+null
+```
 
 #### Request
 ```xml
@@ -139,6 +155,12 @@ Checks if the SSH server is currently enabled or disabled.
 ### Enable SSH
 Turns on the SSH server.
 
+Parameters:
+
+```
+null
+```
+
 #### Request
 ```xml
 <rpc>
@@ -164,6 +186,12 @@ Turns on the SSH server.
 
 ### Disable SSH
 Turns off the SSH server.
+
+Parameters:
+
+```
+null
+```
 
 #### Request
 ```xml
@@ -192,11 +220,17 @@ Turns off the SSH server.
 
 ## 3. Telnet Server Configuration
 Telnet provides remote access, but it's less secure than SSH as data is sent in clear text.
-The response for GET operations will be an `<rpc-reply>` with the `<telnet-server-config>` data directly under it, using `xmlns="yang:telnet"`.
-The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
+
+
 
 ### Get Telnet Status
-Checks if the Telnet server is currently enabled or disabled.
+Checks if the Telnet server is currently enabled or disabled.(true = enable telnet, false = disable telnet)
+
+Parameters:
+
+```
+null
+```
 
 #### Request
 ```xml
@@ -221,6 +255,12 @@ Checks if the Telnet server is currently enabled or disabled.
 
 ### Enable Telnet
 Turns on the Telnet server.
+
+Parameters:
+
+```
+null
+```
 
 #### Request
 ```xml
@@ -248,7 +288,11 @@ Turns on the Telnet server.
 ### Disable Telnet
 Turns off the Telnet server.
 
+Parameters:
 
+```
+null
+```
 #### Request
 ```xml
 <rpc >
@@ -276,12 +320,17 @@ Turns off the Telnet server.
 
 ## 4. Static Routing
 Static routes manually define paths for IP traffic.
-The response for GET operations will be an `<rpc-reply>` with the `<routing>` data directly under it, using `xmlns="yang:route"`.
-The response for edit operations will be a simple `<rpc-reply><ok/></rpc-reply>`.
-
 
 ### Add Static Route
 Adds a new static IP route to the device's routing table. The `operation="create"` attribute indicates that a new route entry should be created.
+
+Parameters:
+
+| Name | Value Type | Requirement | Description |
+| ---- | ---------- | ----------- | ----------- |
+| `prefix` | String | mandatory | The IP route prefix for the destination. |
+| `mask` | String | mandatory | The mask for the destination. |
+| `next-hop` | String | mandatory | IP address of the next hop that can be used to reach the network. |
 
 #### Request
 ```xml
@@ -314,6 +363,14 @@ Adds a new static IP route to the device's routing table. The `operation="create
 
 ### Delete Static Route
 Removes an existing static IP route. The `operation="delete"` attribute specifies that the matching route entry should be removed.
+
+Parameters:
+
+| Name | Value Type | Requirement | Description |
+| ---- | ---------- | ----------- | ----------- |
+| `prefix` | String | mandatory | The IP route prefix for the destination. |
+| `mask` | String | mandatory | The mask for the destination. |
+| `next_hop` | String | mandatory | IP address of the next hop that can be used to reach the network. |
 
 #### Request
 ```xml
