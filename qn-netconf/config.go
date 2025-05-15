@@ -28,7 +28,7 @@ func LoadConfig() (*Config, error) {
 		SSHPort:           830,
 		ServerBanner:      "SSH-2.0-My NETCONF Server v0.1",
 		FrameEnd:          "]]>]]>",
-		ConnectionTimeout: 120 * time.Second, // Directly use time.Duration
+		ConnectionTimeout: 900 * time.Second, // Directly use time.Duration
 		HostKeyPath:       "./netconf_host_key",
 		MiyagiSocketPath:  "/var/run/miyagi.sock",
 		LogLevel:          "INFO",
