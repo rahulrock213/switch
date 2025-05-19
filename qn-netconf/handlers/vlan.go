@@ -18,6 +18,7 @@ import (
 // Changed to align with the namespace observed in the client's <get> filter.
 const VlanNamespace = "yang:vlan"
 const NetconfBaseNamespace = "yang:vlan"
+const VlanCapability = "yang:vlan" // Consistent capability format
 
 // --- XML Data Structures ---
 

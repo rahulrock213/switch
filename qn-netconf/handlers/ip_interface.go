@@ -14,6 +14,7 @@ import (
 
 const IpInterfaceNamespace = "yang:ip-interface"
 const NetconfBaseNamespaceIpInterface = "urn:ietf:params:xml:ns:netconf:base:1.0"
+const IpInterfaceCapability = "yang:ip-interface" // Consistent capability format
 
 // --- Common NETCONF XML Data Structures ---
 

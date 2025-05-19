@@ -13,9 +13,8 @@ import (
 	"qn-netconf/miyagi" // Assuming your miyagi client is in "net_conf/miyagi"
 )
 
-const InterfaceNamespace = "yang:interfaces" // Example namespace
-// The constants below and RpcReplyIF, DataIF etc. are for standard NETCONF replies.
-// They will NOT be used for the new custom XML output format requested for GetInterfaces.
+const InterfaceNamespace = "yang:interfaces"                             // Example namespace
+const InterfaceCapability = "yang:interfaces"                            // Consistent capability format
 const NetconfBaseNamespaceIF = "urn:ietf:params:xml:ns:netconf:base:1.0" // Using IF suffix for clarity if in same package scope as vlan.go without shared utils
 
 // --- Common NETCONF XML Data Structures (Ideally in a shared package) ---

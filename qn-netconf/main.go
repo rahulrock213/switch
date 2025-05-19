@@ -283,18 +283,18 @@ func handleNETCONFCommunication(channel ssh.Channel, sessionID string) error {
     <capability>%s</capability> <!-- STP Global Configuration Capability -->
     <capability>%s</capability> <!-- Port Status Capability -->
     <capability>%s</capability> <!-- Port Description Capability -->
-    <capability>%s</capability> <!-- Port Speed Capability -->    
+    <capability>%s</capability> <!-- Port Speed Capability -->
   </capabilities>
   <session-id>%s</session-id>
 </hello>
 %s`,
-		handlers.VlanNamespace,
-		handlers.InterfaceNamespace,
-		handlers.SshConfigNamespace,
-		handlers.TelnetConfigNamespace,
-		handlers.IpInterfaceNamespace,
-		handlers.PortConfigNamespace,
-		handlers.StpGlobalConfigNamespace,
+		handlers.VlanCapability,            // Use new Capability constant
+		handlers.InterfaceCapability,       // Use new Capability constant
+		handlers.SshConfigCapability,       // Use new Capability constant
+		handlers.TelnetConfigCapability,    // Use new Capability constant
+		handlers.IpInterfaceCapability,     // Use new Capability constant
+		handlers.PortConfigCapability,      // Use new Capability constant
+		handlers.StpGlobalConfigCapability, // Use new Capability constant
 		handlers.PortStatusCapability,      // Add Port Status Capability
 		handlers.PortDescriptionCapability, // Add Port Description Capability
 		handlers.PortSpeedCapability,       // Add Port Speed Capability

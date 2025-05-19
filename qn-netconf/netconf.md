@@ -340,7 +340,7 @@ Parameters:
       <routing xmlns="yang:set_route">
         <static-routes>
           <route operation="create">
-            <prefix>1131.108.5.0</prefix>
+            <prefix>131.108.5.0</prefix>
             <mask>255.255.255.255</mask>
             <next-hop>131.108.1.12</next-hop>
           </route>

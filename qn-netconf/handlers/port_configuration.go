@@ -15,6 +15,7 @@ import (
 
 const PortConfigNamespace = "yang:port-config"
 const NetconfBaseNamespacePortConfig = "urn:ietf:params:xml:ns:netconf:base:1.0"
+const PortConfigCapability = "yang:port-config" // Consistent capability format
 
 // --- Common NETCONF XML Data Structures ---
 type RpcReplyPortConfig struct {

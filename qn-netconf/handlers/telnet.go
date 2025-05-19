@@ -13,6 +13,7 @@ import (
 
 const TelnetConfigNamespace = "yang:telnet"
 const NetconfBaseNamespaceTelnet = "urn:ietf:params:xml:ns:netconf:base:1.0"
+const TelnetConfigCapability = "yang:telnet" // Consistent capability format
 
 // --- Common NETCONF XML Data Structures (for Telnet handler) ---
 

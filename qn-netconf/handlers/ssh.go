@@ -13,6 +13,7 @@ import (
 
 const SshConfigNamespace = "yang:ssh"
 const NetconfBaseNamespaceSSH = "urn:ietf:params:xml:ns:netconf:base:1.0"
+const SshConfigCapability = "yang:ssh" // Consistent capability format
 
 // --- Common NETCONF XML Data Structures (for SSH handler) ---
 

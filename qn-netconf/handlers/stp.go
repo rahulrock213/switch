@@ -13,6 +13,7 @@ import (
 
 const StpGlobalConfigNamespace = "yang:stp-global-config"
 const NetconfBaseNamespaceStp = "urn:ietf:params:xml:ns:netconf:base:1.0"
+const StpGlobalConfigCapability = "yang:stp-global-config" // Consistent capability format
 
 // --- Common NETCONF XML Data Structures ---
 type RpcReplyStp struct {
